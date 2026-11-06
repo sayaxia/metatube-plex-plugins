@@ -20,25 +20,36 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 后果是 `-U` 结尾的片子永远没角标（`U` 不在词表里），`-UC` 也只能打同一张图。
 
-改后按 `uc > u > c` 三级判定，从文件名取词元（按 `-` `_` 空格 分割、忽略大小写）：
+改后按 `uc > u > c` 三级判定，词元从文件名取（按 `-` `_` 空格 分割、忽略大小写），「中文字幕」还会额外看同目录的裸字幕文件：
 
-| 文件名 | 判定 | 使用的图 | 预置项 |
+| 文件名 / 目录内容 | 判定 | 使用的图 | 预置项 |
 |---|---|---|---|
-| `ABP-321-UC.mp4`、`ABP-321-C-U.mp4` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
-| `ABP-321-U.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
-| `ABP-321-C.mp4`、`-ch`、名字含「中文字幕」、有外挂中字 | `c` | `zimu.png` 中文字幕 | `badge_url` |
-| `ABP-321.mp4`、`SSIS-001-UHD.mp4` | 无 | 不合成角标 | — |
+| `ABP-321-UC.mp4`、`ABP-321-C-U.mp4`、`ABP-321-LTX-UC.mp4` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
+| `ABP-321-LTX.mp4` + 同目录 `ABP-321-LTX.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
+| `ABP-321-U.mp4` + 同目录 `ABP-321-U.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
+| `ABP-321-U.mp4`、`ABP-321-LTX.mp4`、`ABP-321-BASICVSR.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
+| `ABP-321-C.mp4`、`-ch`、名字含「中文字幕」 | `c` | `zimu.png` 中文字幕 | `badge_url` |
+| `ABP-321.mp4` + 同目录 `ABP-321.srt`（裸同名字幕） | `c` | `zimu.png` 中文字幕 | `badge_url` |
+| `ABP-321.mp4` + 同目录 `ABP-321.chs.srt` / `.zh-CN.ass` | `c` | `zimu.png` 中文字幕 | `badge_url` |
+| `ABP-321.mp4`、`SSIS-001-UHD.mp4`、字幕名对不上 | 无 | 不合成角标 | — |
 
-改动文件（4 个，+73/−5）：
+两个概念先明确，否则容易配错：
+
+- **无码标记**（`UNCENSORED_TAGS`）：`U`、`LTX`、`BASICVSR`、`BASICVSR++`。`-LTX` 与 `-BasicVSR++` 都是 AI 修复马赛克的产物，等同无码；`-UHD`、`-UNCENSORED` 里的 `UHD` / `UNCENSORED` 是独立词元，**不会**被当成 `U`。
+- **裸同名字幕**（`has_bare_subtitle()`）：同目录存在与视频**完全同名**、且**不带任何语言标记**的字幕，如 `ABP-321.mp4` 旁的 `ABP-321.srt` / `.ass` / `.sub` / `.vtt`（不含 `.nfo`，跳过 `.` `~` 开头的隐藏文件）。JAV 库里这类字幕基本都是中文，所以直接计入「有中文字幕」。带语言标记的 `ABP-321.chs.srt` 走另一条正则（`chs/chi/cht/zh/zho/zh-CN...`），两条都支持。
+
+判定只用**视频所在目录**，不看 `Plex Support/Subtitles` 全局目录；文件名词元判定不需要文件系统，裸字幕判定需要路径可读（Plex 容器挂载对不上时自动降级为「无」）。
+
+改动文件（4 个）：
 
 | 文件 | 改动 |
 |---|---|
-| `MetaTube.bundle/Contents/Code/utils.py` | 新增 `get_badge_type()` / `get_badge_name()` 与 `BADGE_TYPE_*` 常量 |
+| `MetaTube.bundle/Contents/Code/utils.py` | 新增 `get_badge_type()` / `get_badge_name()` / `has_bare_subtitle()` 与 `BADGE_TYPE_*`、`UNCENSORED_TAGS` 常量 |
 | `MetaTube.bundle/Contents/Code/constants.py` | 新增 `KEY_BADGE_URL_U` / `KEY_BADGE_URL_UC` |
 | `MetaTube.bundle/Contents/Code/__init__.py` | 先收集 `video_files`，再按类型取图写进 `?badge=` |
 | `MetaTube.bundle/Contents/DefaultPrefs.json` | 新增两个 text 项，默认 `u.png` / `uc.png` |
 
-提交：`064ef8c Feature: per-type badge (C / U / UC) selected by filename`
+提交：`064ef8c Feature: per-type badge (C / U / UC) selected by filename`，后续 `feat: -LTX / bare subtitle badge rules`。
 
 ---
 

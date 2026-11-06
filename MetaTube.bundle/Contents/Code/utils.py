@@ -139,6 +139,42 @@ BADGE_TYPE_CHINESE = 'c'
 BADGE_TYPE_UNCENSORED = 'u'
 BADGE_TYPE_CHINESE_UNCENSORED = 'uc'
 
+# Tags that mark a video as uncensored / mosaic-restored. Besides the explicit
+# "-U" suffix, AI mosaic-restoration releases use "-LTX" (and occasionally
+# "-BasicVSR++"), which are uncensored by nature.
+UNCENSORED_TAGS = ('U', 'LTX', 'BASICVSR', 'BASICVSR++')
+
+# Subtitle extensions considered when looking for a bare same-name subtitle.
+BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'idx',
+                            'psb', 'vtt', 'txt')
+
+
+def has_bare_subtitle(video_name):
+    """Check for a bare same-name subtitle file next to the video.
+
+    A "bare" subtitle has no language tag at all, e.g. ``ABP-321.srt`` sitting
+    next to ``ABP-321.mp4``. For JAV libraries such files are almost always
+    Chinese subtitles, so they count as Chinese even though the filename does
+    not carry a ``chs`` / ``zh`` marker.
+    """
+    try:
+        if not os.path.exists(video_name):
+            return False
+        basename = os.path.splitext(
+            os.path.basename(video_name))[0].upper()
+        folder = os.path.dirname(video_name) or '.'
+        for filename in os.listdir(folder):
+            if filename.startswith('.') or filename.startswith('~'):
+                continue
+            name, ext = os.path.splitext(os.path.basename(filename))
+            if ext.lower()[1:] not in BARE_SUBTITLE_EXTENSIONS:
+                continue
+            if name.upper() == basename:
+                return True
+    except Exception:
+        return False
+    return False
+
 
 def get_badge_type(video_name, chinese_subtitle_on=False):
     name, ext = os.path.splitext(
@@ -149,10 +185,12 @@ def get_badge_type(video_name, chinese_subtitle_on=False):
     values = [i for i in re.split(r'[-_\s]', name.upper()) if i]
 
     has_uc_tag = 'UC' in values
-    has_u_tag = has_uc_tag or 'U' in values
+    has_u_tag = has_uc_tag or any(tag in values for tag in UNCENSORED_TAGS)
     has_c_tag = (chinese_subtitle_on or
                  CHINESE_SUBTITLE in name or
-                 'C' in values or 'CH' in values)
+                 'C' in values or 'CH' in values or
+                 has_bare_subtitle(video_name) or
+                 has_external_chinese_subtitle(video_name))
 
     if has_uc_tag or (has_u_tag and has_c_tag):
         return BADGE_TYPE_CHINESE_UNCENSORED

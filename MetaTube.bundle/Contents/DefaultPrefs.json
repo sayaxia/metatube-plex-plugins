@@ -55,13 +55,13 @@
   },
   {
     "id": "badge_url",
-    "label": "Badge URL (Chinese subtitle)",
+    "label": "Badge URL (Chinese subtitle: -C / bare .srt)",
     "type": "text",
     "default": "zimu.png"
   },
   {
     "id": "badge_url_u",
-    "label": "Badge URL (Uncensored)",
+    "label": "Badge URL (Uncensored: -U / -LTX)",
     "type": "text",
     "default": "u.png"
   },
