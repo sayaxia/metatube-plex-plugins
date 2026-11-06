@@ -227,17 +227,48 @@ def get_badge_type(video_name, chinese_subtitle_on=False):
     return None
 
 
-def get_badge_name(video_names, chinese_subtitle_on=False,
-                   chinese='zimu.png', uncensored='u.png', both='uc.png'):
+def get_badge_type_from_files(video_names, chinese_subtitle_on=False):
+    """First badge type detected across the given video files."""
     for video_name in video_names or ():
         badge_type = get_badge_type(video_name, chinese_subtitle_on)
-        if badge_type == BADGE_TYPE_CHINESE_UNCENSORED:
-            return both
-        if badge_type == BADGE_TYPE_UNCENSORED:
-            return uncensored
-        if badge_type == BADGE_TYPE_CHINESE:
-            return chinese
+        if badge_type:
+            return badge_type
     return None
+
+
+def get_badge_name(video_names, chinese_subtitle_on=False,
+                   chinese='zimu.png', uncensored='u.png', both='uc.png'):
+    return get_badge_name_from_type(
+        get_badge_type_from_files(video_names, chinese_subtitle_on),
+        chinese=chinese, uncensored=uncensored, both=both)
+
+
+def get_badge_name_from_type(badge_type,
+                             chinese='zimu.png', uncensored='u.png', both='uc.png'):
+    if badge_type == BADGE_TYPE_CHINESE_UNCENSORED:
+        return both
+    if badge_type == BADGE_TYPE_UNCENSORED:
+        return uncensored
+    if badge_type == BADGE_TYPE_CHINESE:
+        return chinese
+    return None
+
+
+def get_type_tags(badge_type, chinese=None, uncensored=None, both=None):
+    """Plex genres (类型) to add for a badge type.
+
+    ``chinese`` and ``uncensored`` are orthogonal, so a UC video gets both tags
+    and filtering on 中文字幕 also returns UC titles. ``both`` is optional and
+    appends an extra tag (e.g. 中文无码) only when configured.
+    """
+    tags = []
+    if badge_type in (BADGE_TYPE_CHINESE, BADGE_TYPE_CHINESE_UNCENSORED):
+        tags.append(chinese or CHINESE_SUBTITLE)
+    if badge_type in (BADGE_TYPE_UNCENSORED, BADGE_TYPE_CHINESE_UNCENSORED):
+        tags.append(uncensored or TYPE_TAG_UNCENSORED)
+    if badge_type == BADGE_TYPE_CHINESE_UNCENSORED and both:
+        tags.append(both)
+    return tags
 
 
 def extra_media_parts(obj):

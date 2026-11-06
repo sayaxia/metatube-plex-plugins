@@ -15,6 +15,11 @@ DEFAULT_USER_AGENT = '%s.bundle' % PLUGIN_NAME
 # Chinese Subtitle
 CHINESE_SUBTITLE = '中文字幕'
 
+# Type tags (genres) written back from the same filename rules as the poster
+# badge. Users can override the wording in the plug-in preferences.
+TYPE_TAG_UNCENSORED = '无码破解'
+TYPE_TAG_CHINESE_UNCENSORED = '中文无码'
+
 # Content Rating/Country
 DEFAULT_COUNTRY = 'Japan'
 DEFAULT_CONTENT_RATING = 'JP-18+'
@@ -72,6 +77,10 @@ KEY_ENABLE_BADGES = 'enable_badges'
 KEY_BADGE_URL = 'badge_url'
 KEY_BADGE_URL_U = 'badge_url_u'
 KEY_BADGE_URL_UC = 'badge_url_uc'
+KEY_ENABLE_TYPE_TAGS = 'enable_type_tags'
+KEY_TYPE_TAG_CHINESE = 'type_tag_c'
+KEY_TYPE_TAG_UNCENSORED = 'type_tag_u'
+KEY_TYPE_TAG_CHINESE_UNCENSORED = 'type_tag_uc'
 KEY_ENABLE_MOVIE_PROVIDER_FILTER = 'enable_movie_provider_filter'
 KEY_MOVIE_PROVIDER_FILTER = 'movie_provider_filter'
 KEY_ENABLE_TITLE_TEMPLATE = 'enable_title_template'

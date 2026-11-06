@@ -9,7 +9,7 @@ Fork 自 [metatube-community/metatube-plex-plugins](https://github.com/metatube-
 
 ## 一、这个分支改了什么
 
-**只有一处功能改动：角标（badge）按文件名后缀自动选择素材。**
+**两处功能改动：角标（badge）按文件名后缀自动选图，类型标签（genres）同步判定结果。**
 
 原版只有一个 `Badge URL` 输入框，值是全局的，而且只有「是否中文字幕」一个判定门：
 
@@ -45,9 +45,9 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 | 文件 | 改动 |
 |---|---|
-| `MetaTube.bundle/Contents/Code/utils.py` | 新增 `get_badge_type()` / `get_badge_name()` / `has_bare_subtitle()` 与 `BADGE_TYPE_*`、`UNCENSORED_TAGS` 常量 |
-| `MetaTube.bundle/Contents/Code/constants.py` | 新增 `KEY_BADGE_URL_U` / `KEY_BADGE_URL_UC` |
-| `MetaTube.bundle/Contents/Code/__init__.py` | 先收集 `video_files`，再按类型取图写进 `?badge=` |
+| `MetaTube.bundle/Contents/Code/utils.py` | 新增 `get_badge_type()` / `get_badge_name()` / `has_bare_subtitle()` / `get_type_tags()` 与 `BADGE_TYPE_*`、`UNCENSORED_TAGS` 常量 |
+| `MetaTube.bundle/Contents/Code/constants.py` | 新增 `KEY_BADGE_URL_U` / `KEY_BADGE_URL_UC` 与 `KEY_TYPE_TAG_*`、`TYPE_TAG_*` 文案常量 |
+| `MetaTube.bundle/Contents/Code/__init__.py` | 先收集 `video_files` 算一次 `badge_type`，既用于 `?badge=` 也用于写 genres |
 | `MetaTube.bundle/Contents/DefaultPrefs.json` | 新增两个 text 项，默认 `u.png` / `uc.png` |
 
 提交：`064ef8c Feature: per-type badge (C / U / UC) selected by filename`，后续 `feat: -LTX / bare subtitle badge rules`。
@@ -77,15 +77,31 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 | 设置项 | 默认值 | 说明 |
 |---|---|---|
-| Enable badges | 关 | 总开关 |
+| Enable badges | 关 | 角标总开关 |
 | Badge URL (Chinese subtitle) | `zimu.png` | `-C` 档；装本分支后**要改回 `zimu.png`**，旧版残留的 `u.png` 会让中字片显示无码 |
 | Badge URL (Uncensored) | `u.png` | `-U` 档（新增） |
 | Badge URL (Chinese subtitle + Uncensored) | `uc.png` | `-UC` 档（新增） |
+| Enable type tags | 开 | 把判定结果写成 Plex「类型」标签（genres） |
+| Type tag: Chinese subtitle | 空 = `中文字幕` | 想改成「中字」就填这里 |
+| Type tag: Uncensored | 空 = `无码破解` | `-U` / `-LTX` / `-UNCENSORED` 用 |
+| Type tag: extra for UC only | 空 = 不加 | 填 `中文无码` 则 UC 额外多一个标签 |
 
 填裸文件名（`u.png`）走**服务端内嵌素材**，零网络开销；填 `https://...` 外链则由服务端抓取并缓存 30 分钟、容量 10。
 
 > ⚠️ 服务端必须带这三张内嵌图（`metatube-sdk-go` 的 `imageutil/badge/`，v1.4.0 起就有）。
 > 服务端**没有**对应素材时，`badge.Badge()` 会因抓取失败直接报错，整张海报请求失败，Plex 只会保留旧图 —— 表现就是「改了设置但海报没变」。
+
+### 类型标签（genres）
+
+详情页那行「姐姐 / 中文字幕 / 4K …」= `metadata.genres`，来源有三层：
+
+1. **provider 返回的 genres**（javbus 抓的分类，如 `お姉さん`→姐姐、`ハイビジョン`→高清、`4K`），开启了翻译就按翻译结果显示；
+2. **本插件追加**：`中文字幕`、`无码破解`（由 `get_type_tags()` 按角标规则生成）；
+3. **Genre substitution 表**：可选，把日文分类替换成你想显示的字。
+
+标签是与角标**共用一套判定**但相互独立：关掉 `Enable badges` 仍会有类型标签，反之亦然。UC 片默认拿「中文字幕 + 无码破解」两个标签（正交，方便筛选时「中文字幕」能覆盖 UC 片）；想要独立的「中文无码」标签，把 `Type tag: extra for UC only` 填上即可。
+
+标签只在**刮削/刷新时**写入，改完设置同样需要 Refresh Metadata。
 
 ---
 

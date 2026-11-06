@@ -241,10 +241,21 @@ class MetaTubeAgent(Agent.Movies):
         for filename in video_files:
             if utils.has_chinese_subtitle(filename):
                 chinese_subtitle_on = True
-                m.genres.append(CHINESE_SUBTITLE)
                 Log.Debug('Chinese subtitle detected for {filename}'
                           .format(filename=filename))
                 break
+
+        # Type tags (Plex 类型): 中文字幕 / 无码破解, derived from the same
+        # filename rules that pick the poster badge.
+        badge_type = utils.get_badge_type_from_files(
+            video_files, chinese_subtitle_on)
+        if Prefs[KEY_ENABLE_TYPE_TAGS]:
+            for tag in utils.get_type_tags(
+                    badge_type,
+                    chinese=Prefs[KEY_TYPE_TAG_CHINESE] or None,
+                    uncensored=Prefs[KEY_TYPE_TAG_UNCENSORED] or None,
+                    both=Prefs[KEY_TYPE_TAG_CHINESE_UNCENSORED] or None):
+                m.genres.append(tag)
 
         # Apply Preferences
         if Prefs[KEY_ENABLE_REAL_ACTOR_NAMES]:
@@ -383,9 +394,8 @@ class MetaTubeAgent(Agent.Movies):
         # Badge (C / U / UC)
         badge = None
         if Prefs[KEY_ENABLE_BADGES]:
-            badge = utils.get_badge_name(
-                video_files,
-                chinese_subtitle_on=chinese_subtitle_on,
+            badge = utils.get_badge_name_from_type(
+                badge_type,
                 chinese=Prefs[KEY_BADGE_URL],
                 uncensored=Prefs[KEY_BADGE_URL_U] or 'u.png',
                 both=Prefs[KEY_BADGE_URL_UC] or 'uc.png')

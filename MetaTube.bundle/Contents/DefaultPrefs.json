@@ -72,6 +72,30 @@
     "default": "uc.png"
   },
   {
+    "id": "enable_type_tags",
+    "label": "Enable type tags (中文字幕 / 无码破解)",
+    "type": "bool",
+    "default": "true"
+  },
+  {
+    "id": "type_tag_c",
+    "label": "Type tag: Chinese subtitle (empty = 中文字幕)",
+    "type": "text",
+    "default": ""
+  },
+  {
+    "id": "type_tag_u",
+    "label": "Type tag: Uncensored (empty = 无码破解)",
+    "type": "text",
+    "default": ""
+  },
+  {
+    "id": "type_tag_uc",
+    "label": "Type tag: extra for UC only (empty = none)",
+    "type": "text",
+    "default": ""
+  },
+  {
     "id": "enable_movie_provider_filter",
     "label": "Enable movie provider filter",
     "type": "bool",
