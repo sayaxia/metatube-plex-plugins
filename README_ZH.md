@@ -1,5 +1,7 @@
 # MetaTube Plex Plug-Ins
 
+> 本文件是上游原版中文说明，仅作存档。本分支（sayaxia fork）的改动、安装与排错请看 [README.md](./README.md)。
+
 **[English](./README.md) | 简体中文**
 
 ![Plugin Banner](https://metatube-community.github.io/images/banner-dark.png)

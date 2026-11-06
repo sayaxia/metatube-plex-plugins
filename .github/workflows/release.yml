@@ -11,6 +11,10 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - '*.bundle/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   bundle:
@@ -28,15 +32,28 @@ jobs:
           echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "version=$(date -u '+%Y.%-m%d.%-H%M.0')" >> $GITHUB_OUTPUT
 
+      - name: Verify bundle code
+        run: |
+          set -e
+          find . -name '__pycache__' -type d -prune -exec rm -rf {} + || true
+          python3 -m py_compile MetaTube.bundle/Contents/Code/*.py
+          python3 -c "import json;p={x['id']:x for x in json.load(open('MetaTube.bundle/Contents/DefaultPrefs.json',encoding='utf-8'))};assert all(k in p for k in ['enable_badges','badge_url','badge_url_u','badge_url_uc']),'missing prefs';print('prefs OK ->',p['badge_url']['default'],p['badge_url_u']['default'],p['badge_url_uc']['default'])"
+          grep -q 'def get_badge_type' MetaTube.bundle/Contents/Code/utils.py
+          grep -q 'get_badge_name' MetaTube.bundle/Contents/Code/__init__.py
+          echo "per-type badge logic present"
+
       - name: Make bundle
         run: |
+          set -e
           echo v${{ steps.shell.outputs.version }}-${{ steps.shell.outputs.commit }} | tee VERSION
+          find . -name '__pycache__' -type d -prune -exec rm -rf {} + || true
           cp LICENSE   MetaTube.bundle/
           cp VERSION   MetaTube.bundle/
           cp LICENSE   MetaTubeHelper.bundle/
           cp VERSION   MetaTubeHelper.bundle/
           zip -r MetaTube.bundle.zip MetaTube.bundle/
           zip -r MetaTubeHelper.bundle.zip MetaTubeHelper.bundle/
+          ls -lh *.zip
 
       - name: Upload Releases
         uses: softprops/action-gh-release@v2
@@ -44,7 +61,10 @@ jobs:
           files: |
             MetaTube.bundle.zip
             MetaTubeHelper.bundle.zip
-          body: _Auto Released by GitHub Actions_
+          body: |
+            _Auto Released by GitHub Actions_
+
+            Fork build: per-type badge (`-C` -> `zimu.png`, `-U` -> `u.png`, `-UC` -> `uc.png`).
           name: v${{ steps.shell.outputs.version }}
           tag_name: bundle
           draft: false
