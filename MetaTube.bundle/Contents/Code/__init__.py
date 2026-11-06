@@ -54,6 +54,24 @@ def ValidatePrefs():
     Log.Debug('ValidatePrefs called.')
 
 
+def get_pref(key, default=None):
+    """Read a preference without ever raising.
+
+    Plex builds the ``Prefs`` object when the bundle is loaded, so a preference
+    that only exists in a newer bundle can be missing at runtime (a plain
+    ``Prefs[key]`` then raises KeyError and aborts the whole metadata update).
+    Empty values fall back to ``default`` as well, so clearing a text field in
+    the UI restores the documented behaviour.
+    """
+    try:
+        value = Prefs[key]
+    except Exception:
+        Log.Warn('Preference {key} is not available, using {default}'
+                 .format(key=key, default=default))
+        return default
+    return default if value is None or value == '' else value
+
+
 class MetaTubeAgent(Agent.Movies):
     name = PLUGIN_NAME
     languages = LANGUAGES
@@ -235,27 +253,37 @@ class MetaTubeAgent(Agent.Movies):
         release_date = (m.release_date.strftime('%Y-%m-%d')
                         if m.release_date.year >= 1900 else None)
 
-        # Detect Chinese Subtitles
+        # Detect Chinese subtitles, poster badge and type tags. All three are
+        # derived from file names, so they share one guard: an unreadable file
+        # (or a stale module) must never abort the update. Otherwise Plex keeps
+        # the "provider:id" fallback title and drops the rest of the metadata.
         chinese_subtitle_on = False
+        badge_type = None
         video_files = [p.file for p in utils.extra_media_parts(media)]
-        for filename in video_files:
-            if utils.has_chinese_subtitle(filename):
-                chinese_subtitle_on = True
-                Log.Debug('Chinese subtitle detected for {filename}'
-                          .format(filename=filename))
-                break
+        try:
+            for filename in video_files:
+                if utils.has_chinese_subtitle(filename):
+                    chinese_subtitle_on = True
+                    Log.Debug('Chinese subtitle detected for {filename}'
+                              .format(filename=filename))
+                    break
 
-        # Type tags (Plex 类型): 中文字幕 / 无码破解, derived from the same
-        # filename rules that pick the poster badge.
-        badge_type = utils.get_badge_type_from_files(
-            video_files, chinese_subtitle_on)
-        if Prefs[KEY_ENABLE_TYPE_TAGS]:
-            for tag in utils.get_type_tags(
-                    badge_type,
-                    chinese=Prefs[KEY_TYPE_TAG_CHINESE] or None,
-                    uncensored=Prefs[KEY_TYPE_TAG_UNCENSORED] or None,
-                    both=Prefs[KEY_TYPE_TAG_CHINESE_UNCENSORED] or None):
-                m.genres.append(tag)
+            # Type tags (Plex 类型): 中文字幕 / 无码破解, derived from the same
+            # filename rules that pick the poster badge.
+            badge_type = utils.get_badge_type_from_files(
+                video_files, chinese_subtitle_on)
+            if get_pref(KEY_ENABLE_TYPE_TAGS, True):
+                if m.genres is None:
+                    m.genres = []
+                for tag in utils.get_type_tags(
+                        badge_type,
+                        chinese=get_pref(KEY_TYPE_TAG_CHINESE),
+                        uncensored=get_pref(KEY_TYPE_TAG_UNCENSORED),
+                        both=get_pref(KEY_TYPE_TAG_CHINESE_UNCENSORED)):
+                    m.genres.append(tag)
+        except Exception as e:
+            Log.Warn('Filename rules failed for {id}: {error}'
+                     .format(id=m.id, error=e))
 
         # Apply Preferences
         if Prefs[KEY_ENABLE_REAL_ACTOR_NAMES]:
@@ -353,7 +381,8 @@ class MetaTubeAgent(Agent.Movies):
                         r.image = self.get_review_image(review.score * 2)
                         r.link = m.homepage
                         r.text = review.comment
-                        _ = review.title  # title is never used
+                        # review.title is intentionally unused; do not assign
+                        # it to "_" - RestrictedPython rejects underscore names.
 
                     # Audience Rating
                     scores = [i.score for i in reviews if i.score > 0]
@@ -393,22 +422,37 @@ class MetaTubeAgent(Agent.Movies):
 
         # Badge (C / U / UC)
         badge = None
-        if Prefs[KEY_ENABLE_BADGES]:
-            badge = utils.get_badge_name_from_type(
-                badge_type,
-                chinese=Prefs[KEY_BADGE_URL],
-                uncensored=Prefs[KEY_BADGE_URL_U] or 'u.png',
-                both=Prefs[KEY_BADGE_URL_UC] or 'uc.png')
-            if badge:
-                Log.Debug('Badge detected: {badge}'.format(badge=badge))
+        try:
+            if get_pref(KEY_ENABLE_BADGES, True):
+                badge = utils.get_badge_name_from_type(
+                    badge_type,
+                    chinese=get_pref(KEY_BADGE_URL, 'zimu.png'),
+                    uncensored=get_pref(KEY_BADGE_URL_U, 'u.png'),
+                    both=get_pref(KEY_BADGE_URL_UC, 'uc.png'))
+                if badge:
+                    Log.Debug('Badge detected: {badge}'.format(badge=badge))
+        except Exception as e:
+            Log.Warn('Badge selection failed: {error}'.format(error=e))
 
         # Poster Image
         primary = api.get_primary_image_url(m.provider, m.id, pos=pid.position, badge=badge)
         # noinspection PyBroadException
         try:
-            metadata.posters[primary] = Proxy.Media(api.get_content(url=primary))
+            content = api.get_content(url=primary)
         except:
-            Log.Warn('Failed to load poster image: {primary}'.format(primary=primary))
+            Log.Warn('Failed to download poster image: {primary}'.format(primary=primary))
+        else:
+            # Do NOT try to clean up older posters here. On PMS 1.40 the
+            # poster container is append-only and none of the removal paths
+            # work: clear() does not exist, validate_keys() is a no-op,
+            # deleting a key only empties the in-memory container, DELETE on
+            # /poster returns 404, and metadata.thumb is not writable. Plex
+            # also skips a submission whose URL it already knows, so the same
+            # key never refreshes the image. Re-submitting the current URL is
+            # therefore the only correct behaviour; stale candidates have to
+            # be cleaned up from outside by a tool that pins the newest one.
+            metadata.posters[primary] = Proxy.Media(content)
+            Log.Debug('Poster submitted: {url}'.format(url=primary))
 
         # Art Image
         backdrop = api.get_backdrop_image_url(m.provider, m.id)

@@ -91,9 +91,61 @@ def table_substitute(table, items):
     return [(table[i.upper()] if i.upper() in table else i) for i in items]
 
 
+# Plex runs plug-ins with a trimmed ``builtins``: ``any`` and ``bytes`` are
+# both missing there (verified against PMS Plugin Logs, which logged
+# "global name 'any' is not defined" and later "global name 'bytes' is not
+# defined"). Decide the text/byte types from the interpreter version instead
+# of a ``NameError`` probe - the Python 3 shim near the top aliases
+# ``unicode`` to ``str``, which would make a probe pick the wrong pair.
+#
+# The names must NOT start with an underscore: RestrictedPython rejects every
+# such identifier at compile time ("_X is an invalid variable name because it
+# starts with _") and the whole plug-in fails to load, which makes it vanish
+# from Plex entirely. Keep module level helpers underscore-free for the same
+# reason.
+if sys.version_info.major == 3:
+    TEXT_TYPE = str
+    BYTE_TYPE = bytes
+else:
+    TEXT_TYPE = unicode   # noqa: F821  (Python 2; ``str`` is the byte type)
+    BYTE_TYPE = str
+
+
+def as_unicode(value):
+    """Best-effort conversion to ``unicode``.
+
+    Plex hands file names over as ``str`` on some endpoints and ``unicode`` on
+    others. Mixing the two in Python 2 makes the interpreter decode the byte
+    string with ASCII and raise UnicodeDecodeError, so every comparison below
+    goes through this helper first.
+    """
+    if isinstance(value, TEXT_TYPE):
+        return value
+    if isinstance(value, BYTE_TYPE):
+        for encoding in ('utf-8', 'latin-1'):
+            try:
+                return value.decode(encoding)
+            except Exception:
+                continue
+        return value.decode('utf-8', 'replace')
+    return TEXT_TYPE(value)
+
+
+def probe(func, *args):
+    """Run a filesystem probe, treating any failure as "no evidence".
+
+    Scanning a NAS folder can raise (undecodable names, vanished share, ...).
+    A probe is only ever a hint, so it must never take down the caller.
+    """
+    try:
+        return func(*args)
+    except Exception:
+        return False
+
+
 def has_embedded_chinese_subtitle(video_name):
     def has_tag(s, *tags):
-        values = [i.upper() for i in re.split(r'[-_\s]', s)]
+        values = [i.upper() for i in re.split(r'[-_\s]', as_unicode(s))]
         for tag in tags:
             if tag.upper() in values:
                 return True
@@ -104,15 +156,31 @@ def has_embedded_chinese_subtitle(video_name):
     if ext.lower() not in VIDEO_EXTENSIONS:
         return False
 
-    return CHINESE_SUBTITLE in name or has_tag(name, 'C', 'UC', 'ch')
+    # CHINESE_SUBTITLE is a byte string on Python 2, so comparing it with a
+    # unicode name would raise; normalise both sides first.
+    return (as_unicode(CHINESE_SUBTITLE) in as_unicode(name) or
+            has_tag(name, 'C', 'UC', 'ch'))
+
+
+def list_dir_names(folder):
+    """Filenames in ``folder``, or an empty list when it cannot be read.
+
+    A NFS/CIFS share may hold names that cannot be decoded, or the folder may
+    vanish between two scans; neither is worth aborting a metadata update.
+    """
+    try:
+        return os.listdir(folder)
+    except Exception:
+        return []
 
 
 def has_external_chinese_subtitle(video_name, *filenames):
     if not filenames:
-        if not os.path.exists(video_name):
+        if not probe(os.path.exists, video_name):
             return False
         return has_external_chinese_subtitle(
-            video_name, *os.listdir(os.path.dirname(video_name) or '.'))
+            video_name,
+            *list_dir_names(os.path.dirname(video_name) or '.'))
 
     basename, ext = os.path.splitext(
         os.path.basename(video_name))
@@ -123,14 +191,16 @@ def has_external_chinese_subtitle(video_name, *filenames):
         r'\.(ch[ist]|zho?(-(cn|hk|sg|tw))?)\.(ass|srt|ssa|smi|sub|idx|psb|vtt)$', re.IGNORECASE)
     candidates = subtitle_name_candidates(video_name)
     for filename in filenames:
-        if r.search(filename) and r.sub('', filename).upper() in candidates:
+        name = as_unicode(filename)
+        if r.search(name) and r.sub('', name).upper() in candidates:
             return True
     return False
 
 
 def has_chinese_subtitle(video_name):
-    return has_embedded_chinese_subtitle(video_name) or \
-        has_external_chinese_subtitle(video_name)
+    # Both probes may touch the filesystem; neither is allowed to raise.
+    return (probe(has_embedded_chinese_subtitle, video_name) or
+            probe(has_external_chinese_subtitle, video_name))
 
 
 # Badge types, matching the assets embedded in metatube-sdk-go:
@@ -168,7 +238,8 @@ def subtitle_name_candidates(video_name):
     ``ABP-321-LTX`` yields ``ABP-321-LTX`` and ``ABP-321``, so a subtitle named
     after the bare number is still accepted.
     """
-    basename = os.path.splitext(os.path.basename(video_name))[0]
+    basename = as_unicode(
+        os.path.splitext(os.path.basename(video_name))[0])
     candidates = [basename.upper()]
     current = basename
     while True:
@@ -188,21 +259,18 @@ def has_bare_subtitle(video_name):
     Chinese subtitles, so they count as Chinese even though the filename does
     not carry a ``chs`` / ``zh`` marker.
     """
-    try:
-        if not os.path.exists(video_name):
-            return False
-        candidates = subtitle_name_candidates(video_name)
-        folder = os.path.dirname(video_name) or '.'
-        for filename in os.listdir(folder):
-            if filename.startswith('.') or filename.startswith('~'):
-                continue
-            name, ext = os.path.splitext(os.path.basename(filename))
-            if ext.lower()[1:] not in BARE_SUBTITLE_EXTENSIONS:
-                continue
-            if name.upper() in candidates:
-                return True
-    except Exception:
+    if not probe(os.path.exists, video_name):
         return False
+    candidates = subtitle_name_candidates(video_name)
+    for filename in list_dir_names(os.path.dirname(video_name) or '.'):
+        name = as_unicode(filename)
+        if name.startswith('.') or name.startswith('~'):
+            continue
+        stem, ext = os.path.splitext(os.path.basename(name))
+        if ext.lower()[1:] not in BARE_SUBTITLE_EXTENSIONS:
+            continue
+        if stem.upper() in candidates:
+            return True
     return False
 
 
@@ -212,29 +280,61 @@ def get_badge_type(video_name, chinese_subtitle_on=False):
     if ext.lower() not in VIDEO_EXTENSIONS:
         return None
 
+    name = as_unicode(name)
     values = [i for i in re.split(r'[-_\s]', name.upper()) if i]
 
     has_uc_tag = 'UC' in values
-    has_u_tag = has_uc_tag or any(tag in values for tag in UNCENSORED_TAGS)
-    has_c_tag = (chinese_subtitle_on or
-                 CHINESE_SUBTITLE in name or
-                 'C' in values or 'CH' in values or
-                 has_bare_subtitle(video_name) or
-                 has_external_chinese_subtitle(video_name))
+    # NOTE: do not use any()/all() here. Plex runs plug-ins with a reduced
+    # builtins set and ``any`` is not available, which raised NameError and
+    # killed the whole badge decision for every -U / -LTX / -C file (only -UC
+    # survived, because the ``or`` above short-circuits before the call).
+    has_u_tag = has_uc_tag
+    if not has_u_tag:
+        for tag in UNCENSORED_TAGS:
+            if tag in values:
+                has_u_tag = True
+                break
 
-    if has_uc_tag or (has_u_tag and has_c_tag):
+    # Evidence from the file name first: it cannot fail, and "-U" / "-LTX"
+    # alone already settles the uncensored part. The folder scans below are
+    # just hints about external subtitles; on a NAS they can raise for
+    # undecodable names, which used to discard a perfectly good "-LTX" match
+    # and leave the movie with no badge and no tag at all.
+    has_name_c_tag = (chinese_subtitle_on or
+                      as_unicode(CHINESE_SUBTITLE) in name or
+                      'C' in values or 'CH' in values)
+
+    if has_uc_tag:
         return BADGE_TYPE_CHINESE_UNCENSORED
+
     if has_u_tag:
+        # A subtitle next to the video upgrades "uncensored" to "uncensored +
+        # Chinese", but a failed scan must keep the plain uncensored result.
+        if (has_name_c_tag or
+                probe(has_bare_subtitle, video_name) or
+                probe(has_external_chinese_subtitle, video_name)):
+            return BADGE_TYPE_CHINESE_UNCENSORED
         return BADGE_TYPE_UNCENSORED
-    if has_c_tag:
+
+    if (has_name_c_tag or
+            probe(has_bare_subtitle, video_name) or
+            probe(has_external_chinese_subtitle, video_name)):
         return BADGE_TYPE_CHINESE
     return None
 
 
 def get_badge_type_from_files(video_names, chinese_subtitle_on=False):
-    """First badge type detected across the given video files."""
+    """First badge type detected across the given video files.
+
+    The Chinese-subtitle hint is applied per file, not to the whole list: an
+    item holding two versions (``DLDSS-534.mp4`` next to ``DLDSS-534-UC.mp4``)
+    used to inherit the flag from whichever copy carried a subtitle, so the
+    plain file was reported as "c" and the ``-UC`` marker of its sibling was
+    ignored. The badge then claimed "中文字幕" for an uncensored release.
+    """
     for video_name in video_names or ():
-        badge_type = get_badge_type(video_name, chinese_subtitle_on)
+        hint = chinese_subtitle_on and probe(has_chinese_subtitle, video_name)
+        badge_type = get_badge_type(video_name, hint)
         if badge_type:
             return badge_type
     return None

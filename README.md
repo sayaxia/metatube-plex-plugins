@@ -52,6 +52,27 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 提交：`064ef8c Feature: per-type badge (C / U / UC) selected by filename`，后续 `feat: -LTX / bare subtitle badge rules`。
 
+### 后续修复（2026-11）
+
+角标规则本身没变，改的是它在真实 Plex 环境下的存活能力。四个都是实测撞出来的：
+
+| 现象 | 根因 | 修复 |
+|---|---|---|
+| 换完 bundle 后 Plex 里**完全看不到**这个刮削器，也没报错 | Plex 用 RestrictedPython 编译插件代码，**任何以下划线开头的标识符都会在编译期 SyntaxError**，`import utils` 跟着失败，整个 bundle 加载不起来。前端表现就是「目录里明明有，Plex 不认」 | 模块级变量与临时变量全部去掉前导下划线（`TEXT_TYPE` 而非 `_TEXT_TYPE`）；`_ = review.title` 这类占位赋值也删掉 |
+| 角标全部不出现，日志 `global name 'any' is not defined` | Plex 沙箱的 `builtins` 被裁剪，没有 `any()`，也没有 `bytes()` | 无码词元判定改成显式 for 循环；str/bytes 判定改用 `sys.version_info` 分支，不做 `NameError` 探测 |
+| 一部片有两个版本（`X.mp4` + `X-UC.mp4`），角标却判成「中文字幕」 | 「有中文字幕」原先作为**整条 item 的全局标记**传给每个文件：先遍历到普通版，因兄弟文件带字幕被判成 `c`，`-UC` 那份的标记反而被吃掉 | `get_badge_type_from_files()` 改成逐文件判定，`chinese_subtitle_on` 只对该文件成立时才作为 hint 传入 |
+| 刷新后封面还是旧图 | 见下 |  |
+
+**关于封面**：Plex 把海报的 `ratingKey` 定为图片 URL 的 `sha1`，并且**同一 URL 重复提交会被静默跳过**。加上海报容器在 PMS 1.40 上是 append-only（`posters.clear()` 没有这个方法、`validate_keys()` 空转、`del posters[k]` 只清内存、`DELETE /poster` 返回 404、`metadata.thumb` 不可写），插件在 `update()` 期间又拿不到新海报的 `ratingKey`（它要等 update 返回后才生成）。
+
+所以本分支**只提交当前图、不尝试清理旧候选**，这是唯一不会越改越乱的行为。想把封面钉到最新那张，需要在刷新完成后从外部调：
+
+```bash
+PUT /library/metadata/{ratingKey}/poster?url=<url-encoded ratingKey>
+```
+
+每提交一次就多了张候选，只有角标真的变了（比如 `-U` 改成 `-UC`）才会多一张，需要时清一次即可。
+
 ---
 
 ## 二、安装
@@ -113,9 +134,11 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 |---|---|
 | 高级设置里只有一个 `Badge URL` 框 | 装的还是原版，不是本分支 |
 | 换了 bundle 但设置没变 | 没重启 Plex（DefaultPrefs 只在启动时合并） |
+| Plug-ins 里有目录，但 Plex 里找不到这个刮削器 | 代码编译失败：`Logs/PMS Plugin Logs/com.plexapp.agents.metatube.log` 里会有 `SyntaxError`（最常见原因是标识符以 `_` 开头），修掉才会被加载 |
 | `-U` / `-UC` 老片没变化 | 没重新刮削：右键 → Refresh Metadata，或重新 Match；刷新时选「替换全部」 |
 | 角标很小一块 | 服务端把整块 1000×1000 画布缩到海报高度 1/5，丝带只占画布 31%，视觉宽度约海报高 6%，属正常 |
 | 海报直接不显示 | 服务端拉外链超时/404，或用了不存在的图名 |
+| 一部片有 `X.mp4` + `X-UC.mp4` 两个版本，角标只对应其中一版 | Plex 一个 movie 只有一张海报、一个角标；两个版本共用一个条目 id 时，角标必然只能表示其中一个。要么拆成两条，要么只保留一个版本 |
 
 判定仍然**只看文件名**：不探测内嵌字幕轨。文件名干净但内嵌中字的片子不会打标（Plex 老式 agent 阶段拿不到可靠的流信息）。
 
