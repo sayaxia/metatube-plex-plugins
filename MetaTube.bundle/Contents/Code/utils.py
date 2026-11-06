@@ -111,7 +111,8 @@ def has_external_chinese_subtitle(video_name, *filenames):
     if not filenames:
         if not os.path.exists(video_name):
             return False
-        return has_external_chinese_subtitle(video_name, *os.listdir(os.path.dirname(video_name)))
+        return has_external_chinese_subtitle(
+            video_name, *os.listdir(os.path.dirname(video_name) or '.'))
 
     basename, ext = os.path.splitext(
         os.path.basename(video_name))
@@ -147,8 +148,11 @@ BADGE_TYPE_CHINESE_UNCENSORED = 'uc'
 UNCENSORED_TAGS = ('U', 'UNCENSORED', 'LTX', 'BASICVSR', 'BASICVSR++')
 
 # Subtitle extensions considered when looking for a bare same-name subtitle.
-BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'idx',
-                            'psb', 'vtt', 'txt')
+# Only formats that are unambiguously subtitles: ".txt" is left out on purpose
+# because release notes / passwords / magnet links are commonly shipped as
+# "ABP-321.txt", and ".idx" is useless without its ".sub" partner (which is
+# matched on its own).
+BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'psb', 'vtt')
 
 
 # Trailing tokens that mark a video as uncensored / subtitled. Used to accept a

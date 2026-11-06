@@ -35,8 +35,8 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 两个概念先明确，否则容易配错：
 
-- **无码标记**（`UNCENSORED_TAGS`）：`U`、`UNCENSORED`、`LTX`、`BASICVSR`、`BASICVSR++`。`LTX` 与 `BasicVSR++` 是 AI 修复马赛克的产物，`UNCENSORED` 是 `U` 的全拼，四者都等同无码；但 `-UHD` 里的 `UHD` 表示分辨率，**不算**无码。
-- **裸同名字幕**（`has_bare_subtitle()`）：同目录存在与视频同名、且**不带任何语言标记**的字幕，如 `ABP-321.mp4` 旁的 `ABP-321.srt` / `.ass` / `.sub` / `.vtt`（不含 `.nfo`，跳过 `.` `~` 开头的隐藏文件）。JAV 库里这类字幕基本都是中文，所以直接计入「有中文字幕」。带语言标记的 `ABP-321.chs.srt` 走另一条正则（`chs/chi/cht/zh/zho/zh-CN...`），两条都支持。
+- **无码标记**（`UNCENSORED_TAGS`）：`U`、`UNCENSORED`、`LTX`、`BASICVSR`、`BASICVSR++`。`LTX` 与 `BasicVSR++` 是 AI 修复马赛克的产物，`UNCENSORED` 是 `U` 的全拼，这五个词元都等同无码；但 `-UHD` 里的 `UHD` 表示分辨率，**不算**无码。
+- **裸同名字幕**（`has_bare_subtitle()`）：同目录存在与视频同名、且**不带任何语言标记**的字幕，如 `ABP-321.mp4` 旁的 `ABP-321.srt` / `.ass` / `.sub` / `.vtt`（白名单 `ass / srt / ssa / smi / sub / psb / vtt`；`.txt` 与 `.idx` **故意排除**——前者常被用作说明/磁力/密码文件，后者必须配 `.sub` 才有意义，而 `.sub` 本身已在白名单内；忽略 `.nfo`，跳过 `.` `~` 开头的隐藏文件）。JAV 库里这类字幕基本都是中文，所以直接计入「有中文字幕」。带语言标记的 `ABP-321.chs.srt` 走另一条正则（`chs/chi/cht/zh/zho/zh-CN...`），两条都支持。
 - **字幕名可以只写裸番号**（`subtitle_name_candidates()`）：匹配时会逐级剥掉尾部的 `-U` / `-LTX` / `-UC` / `-C` / `-BasicVSR`，所以 `ABP-321-LTX.mp4` 配 `ABP-321.srt` 或 `ABP-321.chs.srt` 同样算命中，不必把后缀抄进字幕名。反向不成立：`ABP-321.mp4` 不会被 `ABP-321-U.srt` 影响。
 
 判定只用**视频所在目录**，不看 `Plex Support/Subtitles` 全局目录；文件名词元判定不需要文件系统，裸字幕判定需要路径可读（Plex 容器挂载对不上时自动降级为「无」）。
