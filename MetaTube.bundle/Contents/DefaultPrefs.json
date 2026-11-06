@@ -55,9 +55,21 @@
   },
   {
     "id": "badge_url",
-    "label": "Badge URL",
+    "label": "Badge URL (Chinese subtitle)",
     "type": "text",
     "default": "zimu.png"
+  },
+  {
+    "id": "badge_url_u",
+    "label": "Badge URL (Uncensored)",
+    "type": "text",
+    "default": "u.png"
+  },
+  {
+    "id": "badge_url_uc",
+    "label": "Badge URL (Chinese subtitle + Uncensored)",
+    "type": "text",
+    "default": "uc.png"
   },
   {
     "id": "enable_movie_provider_filter",

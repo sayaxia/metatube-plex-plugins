@@ -237,7 +237,8 @@ class MetaTubeAgent(Agent.Movies):
 
         # Detect Chinese Subtitles
         chinese_subtitle_on = False
-        for filename in (p.file for p in utils.extra_media_parts(media)):
+        video_files = [p.file for p in utils.extra_media_parts(media)]
+        for filename in video_files:
             if utils.has_chinese_subtitle(filename):
                 chinese_subtitle_on = True
                 m.genres.append(CHINESE_SUBTITLE)
@@ -379,9 +380,17 @@ class MetaTubeAgent(Agent.Movies):
             role.name = actor
             role.photo = self.get_actor_image_url(name=actor)
 
-        # CHS Badge
-        badge = Prefs[KEY_BADGE_URL] \
-            if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on else None
+        # Badge (C / U / UC)
+        badge = None
+        if Prefs[KEY_ENABLE_BADGES]:
+            badge = utils.get_badge_name(
+                video_files,
+                chinese_subtitle_on=chinese_subtitle_on,
+                chinese=Prefs[KEY_BADGE_URL],
+                uncensored=Prefs[KEY_BADGE_URL_U] or 'u.png',
+                both=Prefs[KEY_BADGE_URL_UC] or 'uc.png')
+            if badge:
+                Log.Debug('Badge detected: {badge}'.format(badge=badge))
 
         # Poster Image
         primary = api.get_primary_image_url(m.provider, m.id, pos=pid.position, badge=badge)

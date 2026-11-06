@@ -131,6 +131,51 @@ def has_chinese_subtitle(video_name):
         has_external_chinese_subtitle(video_name)
 
 
+# Badge types, matching the assets embedded in metatube-sdk-go:
+#   zimu.png -> chinese subtitle only
+#   u.png    -> uncensored only
+#   uc.png   -> chinese subtitle + uncensored
+BADGE_TYPE_CHINESE = 'c'
+BADGE_TYPE_UNCENSORED = 'u'
+BADGE_TYPE_CHINESE_UNCENSORED = 'uc'
+
+
+def get_badge_type(video_name, chinese_subtitle_on=False):
+    name, ext = os.path.splitext(
+        os.path.basename(video_name))
+    if ext.lower() not in VIDEO_EXTENSIONS:
+        return None
+
+    values = [i for i in re.split(r'[-_\s]', name.upper()) if i]
+
+    has_uc_tag = 'UC' in values
+    has_u_tag = has_uc_tag or 'U' in values
+    has_c_tag = (chinese_subtitle_on or
+                 CHINESE_SUBTITLE in name or
+                 'C' in values or 'CH' in values)
+
+    if has_uc_tag or (has_u_tag and has_c_tag):
+        return BADGE_TYPE_CHINESE_UNCENSORED
+    if has_u_tag:
+        return BADGE_TYPE_UNCENSORED
+    if has_c_tag:
+        return BADGE_TYPE_CHINESE
+    return None
+
+
+def get_badge_name(video_names, chinese_subtitle_on=False,
+                   chinese='zimu.png', uncensored='u.png', both='uc.png'):
+    for video_name in video_names or ():
+        badge_type = get_badge_type(video_name, chinese_subtitle_on)
+        if badge_type == BADGE_TYPE_CHINESE_UNCENSORED:
+            return both
+        if badge_type == BADGE_TYPE_UNCENSORED:
+            return uncensored
+        if badge_type == BADGE_TYPE_CHINESE:
+            return chinese
+    return None
+
+
 def extra_media_parts(obj):
     if not hasattr(obj, 'all_parts'):
         return ()
