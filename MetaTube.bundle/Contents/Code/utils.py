@@ -120,8 +120,9 @@ def has_external_chinese_subtitle(video_name, *filenames):
 
     r = re.compile(
         r'\.(ch[ist]|zho?(-(cn|hk|sg|tw))?)\.(ass|srt|ssa|smi|sub|idx|psb|vtt)$', re.IGNORECASE)
+    candidates = subtitle_name_candidates(video_name)
     for filename in filenames:
-        if r.search(filename) and r.sub('', filename).upper() == basename.upper():
+        if r.search(filename) and r.sub('', filename).upper() in candidates:
             return True
     return False
 
@@ -149,6 +150,31 @@ BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'idx',
                             'psb', 'vtt', 'txt')
 
 
+# Trailing tokens that mark a video as uncensored / subtitled. Used to accept a
+# subtitle named after the bare number when the video itself carries a tag,
+# e.g. ABP-321-LTX.mp4 sitting next to ABP-321.srt.
+TRAILING_BADGE_TAG = re.compile(
+    r'[-_\s](UC|C|CH|U|LTX|BASICVSR\+\+|BASICVSR)$', re.IGNORECASE)
+
+
+def subtitle_name_candidates(video_name):
+    """Basenames a subtitle may legitimately use for ``video_name``.
+
+    ``ABP-321-LTX`` yields ``ABP-321-LTX`` and ``ABP-321``, so a subtitle named
+    after the bare number is still accepted.
+    """
+    basename = os.path.splitext(os.path.basename(video_name))[0]
+    candidates = [basename.upper()]
+    current = basename
+    while True:
+        match = TRAILING_BADGE_TAG.search(current)
+        if not match or match.start() == 0:
+            break
+        current = current[:match.start()]
+        candidates.append(current.upper())
+    return candidates
+
+
 def has_bare_subtitle(video_name):
     """Check for a bare same-name subtitle file next to the video.
 
@@ -160,8 +186,7 @@ def has_bare_subtitle(video_name):
     try:
         if not os.path.exists(video_name):
             return False
-        basename = os.path.splitext(
-            os.path.basename(video_name))[0].upper()
+        candidates = subtitle_name_candidates(video_name)
         folder = os.path.dirname(video_name) or '.'
         for filename in os.listdir(folder):
             if filename.startswith('.') or filename.startswith('~'):
@@ -169,7 +194,7 @@ def has_bare_subtitle(video_name):
             name, ext = os.path.splitext(os.path.basename(filename))
             if ext.lower()[1:] not in BARE_SUBTITLE_EXTENSIONS:
                 continue
-            if name.upper() == basename:
+            if name.upper() in candidates:
                 return True
     except Exception:
         return False
