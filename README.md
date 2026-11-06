@@ -27,7 +27,7 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 | `ABP-321-UC.mp4`、`ABP-321-C-U.mp4`、`ABP-321-LTX-UC.mp4` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
 | `ABP-321-LTX.mp4` + 同目录 `ABP-321-LTX.srt` 或 `ABP-321.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
 | `ABP-321-U.mp4` + 同目录 `ABP-321-U.srt` 或 `ABP-321.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
-| `ABP-321-U.mp4`、`ABP-321-LTX.mp4`、`ABP-321-BASICVSR.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
+| `ABP-321-U.mp4`、`ABP-321-UNCENSORED.mp4`、`ABP-321-LTX.mp4`、`ABP-321-BASICVSR.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
 | `ABP-321-C.mp4`、`-ch`、名字含「中文字幕」 | `c` | `zimu.png` 中文字幕 | `badge_url` |
 | `ABP-321.mp4` + 同目录 `ABP-321.srt`（裸同名字幕） | `c` | `zimu.png` 中文字幕 | `badge_url` |
 | `ABP-321.mp4` + 同目录 `ABP-321.chs.srt` / `.zh-CN.ass` | `c` | `zimu.png` 中文字幕 | `badge_url` |
@@ -35,7 +35,7 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 两个概念先明确，否则容易配错：
 
-- **无码标记**（`UNCENSORED_TAGS`）：`U`、`LTX`、`BASICVSR`、`BASICVSR++`。`-LTX` 与 `-BasicVSR++` 都是 AI 修复马赛克的产物，等同无码；`-UHD`、`-UNCENSORED` 里的 `UHD` / `UNCENSORED` 是独立词元，**不会**被当成 `U`。
+- **无码标记**（`UNCENSORED_TAGS`）：`U`、`UNCENSORED`、`LTX`、`BASICVSR`、`BASICVSR++`。`LTX` 与 `BasicVSR++` 是 AI 修复马赛克的产物，`UNCENSORED` 是 `U` 的全拼，四者都等同无码；但 `-UHD` 里的 `UHD` 表示分辨率，**不算**无码。
 - **裸同名字幕**（`has_bare_subtitle()`）：同目录存在与视频同名、且**不带任何语言标记**的字幕，如 `ABP-321.mp4` 旁的 `ABP-321.srt` / `.ass` / `.sub` / `.vtt`（不含 `.nfo`，跳过 `.` `~` 开头的隐藏文件）。JAV 库里这类字幕基本都是中文，所以直接计入「有中文字幕」。带语言标记的 `ABP-321.chs.srt` 走另一条正则（`chs/chi/cht/zh/zho/zh-CN...`），两条都支持。
 - **字幕名可以只写裸番号**（`subtitle_name_candidates()`）：匹配时会逐级剥掉尾部的 `-U` / `-LTX` / `-UC` / `-C` / `-BasicVSR`，所以 `ABP-321-LTX.mp4` 配 `ABP-321.srt` 或 `ABP-321.chs.srt` 同样算命中，不必把后缀抄进字幕名。反向不成立：`ABP-321.mp4` 不会被 `ABP-321-U.srt` 影响。
 
