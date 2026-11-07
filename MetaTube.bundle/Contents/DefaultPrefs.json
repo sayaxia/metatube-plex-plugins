@@ -18,6 +18,12 @@
     "default": "false"
   },
   {
+    "id": "enable_fc2_collection",
+    "label": "Group all FC2 titles into an FC2 collection",
+    "type": "bool",
+    "default": "true"
+  },
+  {
     "id": "enable_directors",
     "label": "Enable directors",
     "type": "bool",

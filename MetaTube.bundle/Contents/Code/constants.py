@@ -25,6 +25,13 @@ DEFAULT_COUNTRY = 'Japan'
 DEFAULT_CONTENT_RATING = 'JP-18+'
 DEFAULT_CONTENT_RATING_AGE = 18
 
+# Collections
+# FC2 providers (FC2/FC2DB/FC2PPVDB/fc2hub) never expose a series, so every
+# FC2 title is grouped into this single collection instead.
+COLLECTION_FC2 = 'FC2'
+FC2_NUMBER_PREFIX = 'FC2-'
+FC2_PROVIDER_PREFIX = 'FC2'
+
 # Default Template
 DEFAULT_TITLE_TEMPLATE = '{number} {title}'
 DEFAULT_TRAILER_TEMPLATE = 'サンプル動画 {original_title}'
@@ -68,6 +75,7 @@ VIDEO_EXTENSIONS = ('.3g2', '.3gp', '.asf', '.asx', '.avc', '.avi',
 KEY_API_SERVER = 'api_server'
 KEY_API_TOKEN = 'api_token'
 KEY_ENABLE_COLLECTIONS = 'enable_collections'
+KEY_ENABLE_FC2_COLLECTION = 'enable_fc2_collection'
 KEY_ENABLE_DIRECTORS = 'enable_directors'
 KEY_ENABLE_RATINGS = 'enable_ratings'
 KEY_ENABLE_REVIEWS = 'enable_reviews'

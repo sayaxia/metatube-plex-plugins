@@ -113,6 +113,17 @@ class MetaTubeAgent(Agent.Movies):
             Log.Warn('Get actor image error: {name} ({error})'.format(name=name, error=e))
 
     @staticmethod
+    def is_fc2(m):
+        # FC2 providers (FC2/FC2DB/FC2PPVDB/fc2hub) never expose a series, so
+        # these titles are grouped by provider family or by the FC2-<id>
+        # number instead of a series name.
+        number = (m.number or '').upper()
+        if number.startswith(FC2_NUMBER_PREFIX):
+            return True
+        provider = (m.provider or '').upper()
+        return provider.startswith(FC2_PROVIDER_PREFIX)
+
+    @staticmethod
     def convert_to_real_actor_names(m):
 
         AV_BASE_SUPPORTED_PROVIDERS = (
@@ -398,9 +409,18 @@ class MetaTubeAgent(Agent.Movies):
             metadata.directors.add(director)
 
         # Collections
-        metadata.collections.clear()
+        # Only reset when this update really carries a collection, so a
+        # provider without a series cannot wipe collections added by hand
+        # (same guard as the cast/roles block below).
+        collections = []
         if Prefs[KEY_ENABLE_COLLECTIONS] and m.series.strip():
-            metadata.collections.add(m.series)
+            collections.append(m.series)
+        if Prefs[KEY_ENABLE_FC2_COLLECTION] and self.is_fc2(m) and COLLECTION_FC2 not in collections:
+            collections.append(COLLECTION_FC2)
+        if collections:
+            metadata.collections.clear()
+            for collection in collections:
+                metadata.collections.add(collection)
 
         # Genres
         metadata.genres.clear()
