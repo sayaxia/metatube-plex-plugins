@@ -236,15 +236,21 @@ BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'psb', 'vtt')
 # "SONE-521_restored.LTX_wm.mp4" both carry a "_wm" watermark mark (and the
 # latter uses a dot as separator). Keep the same word list in every consumer
 # of this rule. WM itself is NOT a badge - a bare "ABP-321_wm.mp4" stays plain.
-_BADGE_TOKEN = (r'(UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
-                r'BASICVSR\+\+|BASICVSR)')
-_TOOL_TOKEN = (r'(?:WM|UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
-               r'BASICVSR\+\+|BASICVSR)')
+#
+# NOTE: Plex compiles plug-in modules with RestrictedPython, which rejects any
+# module-level name starting with an underscore ("_BADGE_TOKEN" caused
+# "SyntaxError: ... is an invalid variable name because it starts with '_'").
+# Keep these helpers underscore-free, even though plain Python allows it.
+BADGE_TOKEN_PATTERN = (r'(UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
+                       r'BASICVSR\+\+|BASICVSR)')
+TOOL_TOKEN_PATTERN = (r'(?:WM|UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
+                      r'BASICVSR\+\+|BASICVSR)')
 # Capture the LAST badge token in the chain, so the report keeps showing the
 # most specific mark (e.g. RESTORED for "X_LTX__restored").
 TRAILING_BADGE_TAG = re.compile(
-    r'[-_.\s]+(?:' + _TOOL_TOKEN + r'[-_.\s]+)*' + _BADGE_TOKEN +
-    r'(?:[-_.\s]+' + _TOOL_TOKEN + r')*$',
+    r'[-_.\s]+(?:' + TOOL_TOKEN_PATTERN + r'[-_.\s]+)*' +
+    BADGE_TOKEN_PATTERN +
+    r'(?:[-_.\s]+' + TOOL_TOKEN_PATTERN + r')*$',
     re.IGNORECASE)
 
 
