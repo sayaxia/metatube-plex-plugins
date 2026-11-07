@@ -230,8 +230,21 @@ BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'psb', 'vtt')
 # Trailing tokens that mark a video as uncensored / subtitled. Used to accept a
 # subtitle named after the bare number when the video itself carries a tag,
 # e.g. ABP-321-LTX.mp4 sitting next to ABP-321.srt.
+#
+# Restoration tools can append further marks AFTER the badge token, so the
+# badge is not necessarily the last token: "JUR-110_restored_wm.mp4" and
+# "SONE-521_restored.LTX_wm.mp4" both carry a "_wm" watermark mark (and the
+# latter uses a dot as separator). Keep the same word list in every consumer
+# of this rule. WM itself is NOT a badge - a bare "ABP-321_wm.mp4" stays plain.
+_BADGE_TOKEN = (r'(UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
+                r'BASICVSR\+\+|BASICVSR)')
+_TOOL_TOKEN = (r'(?:WM|UNCENSORED|UC|C|CH|U|LTX|RESTORED|'
+               r'BASICVSR\+\+|BASICVSR)')
+# Capture the LAST badge token in the chain, so the report keeps showing the
+# most specific mark (e.g. RESTORED for "X_LTX__restored").
 TRAILING_BADGE_TAG = re.compile(
-    r'[-_\s]+(UNCENSORED|UC|C|CH|U|LTX|RESTORED|BASICVSR\+\+|BASICVSR)$',
+    r'[-_.\s]+(?:' + _TOOL_TOKEN + r'[-_.\s]+)*' + _BADGE_TOKEN +
+    r'(?:[-_.\s]+' + _TOOL_TOKEN + r')*$',
     re.IGNORECASE)
 
 
@@ -284,7 +297,9 @@ def get_badge_type(video_name, chinese_subtitle_on=False):
         return None
 
     name = as_unicode(name)
-    values = [i for i in re.split(r'[-_\s]', name.upper()) if i]
+    # A dot is a separator too: "SONE-521_restored.LTX_wm" must still expose
+    # the RESTORED token instead of the glued "RESTORED.LTX".
+    values = [i for i in re.split(r'[-._\s]', name.upper()) if i]
 
     has_uc_tag = 'UC' in values
     # NOTE: do not use any()/all() here. Plex runs plug-ins with a reduced
