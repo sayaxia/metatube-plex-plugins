@@ -65,7 +65,12 @@ jobs:
             _Auto Released by GitHub Actions_
 
             Fork build: per-type badge (`-C` -> `zimu.png`, `-U` -> `u.png`, `-UC` -> `uc.png`).
+
+            Commit: `${{ steps.shell.outputs.commit }}`
           name: v${{ steps.shell.outputs.version }}
-          tag_name: bundle
+          # 每个版本一个 tag，历史 Release 全部保留。
+          # 之前固定成 `bundle`，导致每次构建都覆盖同一个 Release，装过旧版的
+          # 用户回不去。tag 里带 commit sha，同一提交重建才会复用同一个 tag。
+          tag_name: v${{ steps.shell.outputs.version }}-${{ steps.shell.outputs.commit }}
           draft: false
           prerelease: false

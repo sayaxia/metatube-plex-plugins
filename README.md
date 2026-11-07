@@ -62,6 +62,7 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 | 角标全部不出现，日志 `global name 'any' is not defined` | Plex 沙箱的 `builtins` 被裁剪，没有 `any()`，也没有 `bytes()` | 无码词元判定改成显式 for 循环；str/bytes 判定改用 `sys.version_info` 分支，不做 `NameError` 探测 |
 | 一部片有两个版本（`X.mp4` + `X-UC.mp4`），角标却判成「中文字幕」 | 「有中文字幕」原先作为**整条 item 的全局标记**传给每个文件：先遍历到普通版，因兄弟文件带字幕被判成 `c`，`-UC` 那份的标记反而被吃掉 | `get_badge_type_from_files()` 改成逐文件判定，`chinese_subtitle_on` 只对该文件成立时才作为 hint 传入 |
 | 刷新后封面还是旧图 | 见下 |  |
+| 重新匹配 / 重刮后**演员凭空消失**（素人片尤其明显） | 原版无条件 `metadata.roles.clear()` 再按 provider 返回的 `actors` 重建；换到没登记演员的源（或番号本身就没有演员信息）就写入空列表，原有演员被抹掉，而标题、封面都正常，很难发现 | 只有本次更新真的带演员名时才 `roles.clear()`，否则保留已有演员；写入时按 provider 原顺序去重，不再用 `set()` 打乱名单顺序 |
 
 **关于封面**：Plex 把海报的 `ratingKey` 定为图片 URL 的 `sha1`，并且**同一 URL 重复提交会被静默跳过**。加上海报容器在 PMS 1.40 上是 append-only（`posters.clear()` 没有这个方法、`validate_keys()` 空转、`del posters[k]` 只清内存、`DELETE /poster` 返回 404、`metadata.thumb` 不可写），插件在 `update()` 期间又拿不到新海报的 `ratingKey`（它要等 update 返回后才生成）。
 
@@ -151,7 +152,7 @@ PUT /library/metadata/{ratingKey}/poster?url=<url-encoded ratingKey>
 - 触发：push 到 `main` 且命中 `*.bundle/**` 或 workflow 文件；也可手动 `workflow_dispatch`
 - 版本号：`v$(date -u '+%Y.%-m%d.%-H%M.0')-<shortsha>`，同时写入 bundle 内的 `VERSION` 文件（LICENSE 一并拷入）
 - 产物：`MetaTube.bundle.zip`、`MetaTubeHelper.bundle.zip`
-- Release：滚动 tag `bundle`，`prerelease: false`
+- Release：**每个版本一个 tag**（`v<版本>-<shortsha>`），历史版本全部保留，可随时回退到旧版。此前固定用滚动 tag `bundle`，每次构建都覆盖同一个 Release，装过旧版的人回不去 —— 已改掉；`bundle` 那个旧 Release 冻结在最后一次滚动构建，不再更新。
 
 本地手动打包（与 CI 等价）：
 

@@ -414,11 +414,20 @@ class MetaTubeAgent(Agent.Movies):
                 metadata.tags.add(tag)
 
         # Actors
-        metadata.roles.clear()
-        for actor in set(m.actors):
-            role = metadata.roles.new()
-            role.name = actor
-            role.photo = self.get_actor_image_url(name=actor)
+        # A provider without a cast (amateur / personal-shot titles often
+        # have none) must not wipe the cast a previous provider filled in, so
+        # only reset when this update really carries names. Iterate the list
+        # instead of a set to keep the provider's own cast order.
+        if m.actors:
+            metadata.roles.clear()
+            seen_actors = set()
+            for actor in m.actors:
+                if not actor or actor in seen_actors:
+                    continue
+                seen_actors.add(actor)
+                role = metadata.roles.new()
+                role.name = actor
+                role.photo = self.get_actor_image_url(name=actor)
 
         # Badge (C / U / UC)
         badge = None
