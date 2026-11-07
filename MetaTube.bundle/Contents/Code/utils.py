@@ -213,9 +213,11 @@ BADGE_TYPE_CHINESE_UNCENSORED = 'uc'
 
 # Tags that mark a video as uncensored / mosaic-restored. Besides the explicit
 # "-U" suffix, AI mosaic-restoration releases use "-LTX" (and occasionally
-# "-BasicVSR++"), which are uncensored by nature. "-UNCENSORED" is the spelled
-# out form of the same marker.
-UNCENSORED_TAGS = ('U', 'UNCENSORED', 'LTX', 'BASICVSR', 'BASICVSR++')
+# "-BasicVSR++" or "__restored"), which are uncensored by nature.
+# "-UNCENSORED" is the spelled out form of the same marker. The separator is
+# not significant: "-LTX", "_LTX" and "__restored" all mean the same as "-U".
+UNCENSORED_TAGS = ('U', 'UNCENSORED', 'LTX', 'RESTORED',
+                   'BASICVSR', 'BASICVSR++')
 
 # Subtitle extensions considered when looking for a bare same-name subtitle.
 # Only formats that are unambiguously subtitles: ".txt" is left out on purpose
@@ -229,7 +231,8 @@ BARE_SUBTITLE_EXTENSIONS = ('ass', 'srt', 'ssa', 'smi', 'sub', 'psb', 'vtt')
 # subtitle named after the bare number when the video itself carries a tag,
 # e.g. ABP-321-LTX.mp4 sitting next to ABP-321.srt.
 TRAILING_BADGE_TAG = re.compile(
-    r'[-_\s](UNCENSORED|UC|C|CH|U|LTX|BASICVSR\+\+|BASICVSR)$', re.IGNORECASE)
+    r'[-_\s]+(UNCENSORED|UC|C|CH|U|LTX|RESTORED|BASICVSR\+\+|BASICVSR)$',
+    re.IGNORECASE)
 
 
 def subtitle_name_candidates(video_name):

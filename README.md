@@ -27,7 +27,7 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 | `ABP-321-UC.mp4`、`ABP-321-C-U.mp4`、`ABP-321-LTX-UC.mp4` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
 | `ABP-321-LTX.mp4` + 同目录 `ABP-321-LTX.srt` 或 `ABP-321.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
 | `ABP-321-U.mp4` + 同目录 `ABP-321-U.srt` 或 `ABP-321.srt` | `uc` | `uc.png` 中文字幕+无码 | `badge_url_uc` |
-| `ABP-321-U.mp4`、`ABP-321-UNCENSORED.mp4`、`ABP-321-LTX.mp4`、`ABP-321-BASICVSR.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
+| `ABP-321-U.mp4`、`ABP-321-UNCENSORED.mp4`、`ABP-321-LTX.mp4`、`ABP-321_LTX.mp4`、`ABP-321__restored.mp4`、`ABP-321-BASICVSR.mp4` | `u` | `u.png` 无码破解 | `badge_url_u` |
 | `ABP-321-C.mp4`、`-ch`、名字含「中文字幕」 | `c` | `zimu.png` 中文字幕 | `badge_url` |
 | `ABP-321.mp4` + 同目录 `ABP-321.srt`（裸同名字幕） | `c` | `zimu.png` 中文字幕 | `badge_url` |
 | `ABP-321.mp4` + 同目录 `ABP-321.chs.srt` / `.zh-CN.ass` | `c` | `zimu.png` 中文字幕 | `badge_url` |
@@ -35,9 +35,9 @@ badge = Prefs[KEY_BADGE_URL] if Prefs[KEY_ENABLE_BADGES] and chinese_subtitle_on
 
 两个概念先明确，否则容易配错：
 
-- **无码标记**（`UNCENSORED_TAGS`）：`U`、`UNCENSORED`、`LTX`、`BASICVSR`、`BASICVSR++`。`LTX` 与 `BasicVSR++` 是 AI 修复马赛克的产物，`UNCENSORED` 是 `U` 的全拼，这五个词元都等同无码；但 `-UHD` 里的 `UHD` 表示分辨率，**不算**无码。
+- **无码标记**（`UNCENSORED_TAGS`）：`U`、`UNCENSORED`、`LTX`、`RESTORED`、`BASICVSR`、`BASICVSR++`。`LTX`、`RESTORED` 与 `BasicVSR++` 是 AI 修复马赛克的产物，`UNCENSORED` 是 `U` 的全拼，这六个词元都等同无码；但 `-UHD` 里的 `UHD` 表示分辨率，**不算**无码。分隔符不重要：`-LTX` / `_LTX` / `__restored` 与 `-U` 等价，连续多个 `-` `_` 空格也会被当成一个分隔符。这些是**同一个版别**的不同拼写，不是不同版本：插件只输出一张 `u.png`（带中文字幕则 `uc.png`），类型标签也只有「无码破解」一个，因此多版本审计会把它们归一成同一类，不会误报「混装版别」。
 - **裸同名字幕**（`has_bare_subtitle()`）：同目录存在与视频同名、且**不带任何语言标记**的字幕，如 `ABP-321.mp4` 旁的 `ABP-321.srt` / `.ass` / `.sub` / `.vtt`（白名单 `ass / srt / ssa / smi / sub / psb / vtt`；`.txt` 与 `.idx` **故意排除**——前者常被用作说明/磁力/密码文件，后者必须配 `.sub` 才有意义，而 `.sub` 本身已在白名单内；忽略 `.nfo`，跳过 `.` `~` 开头的隐藏文件）。JAV 库里这类字幕基本都是中文，所以直接计入「有中文字幕」。带语言标记的 `ABP-321.chs.srt` 走另一条正则（`chs/chi/cht/zh/zho/zh-CN...`），两条都支持。
-- **字幕名可以只写裸番号**（`subtitle_name_candidates()`）：匹配时会逐级剥掉尾部的 `-U` / `-LTX` / `-UC` / `-C` / `-BasicVSR`，所以 `ABP-321-LTX.mp4` 配 `ABP-321.srt` 或 `ABP-321.chs.srt` 同样算命中，不必把后缀抄进字幕名。反向不成立：`ABP-321.mp4` 不会被 `ABP-321-U.srt` 影响。
+- **字幕名可以只写裸番号**（`subtitle_name_candidates()`）：匹配时会逐级剥掉尾部的 `-U` / `-LTX` / `-RESTORED` / `-UC` / `-C` / `-BasicVSR`，所以 `ABP-321-LTX.mp4`、`ABP-321__restored.mp4` 配 `ABP-321.srt` 或 `ABP-321.chs.srt` 同样算命中，不必把后缀抄进字幕名。反向不成立：`ABP-321.mp4` 不会被 `ABP-321-U.srt` 影响。
 
 判定只用**视频所在目录**，不看 `Plex Support/Subtitles` 全局目录；文件名词元判定不需要文件系统，裸字幕判定需要路径可读（Plex 容器挂载对不上时自动降级为「无」）。
 
@@ -170,7 +170,7 @@ zip -r MetaTubeHelper.bundle.zip MetaTubeHelper.bundle/
 
 - **运行环境是 Python 2.7**（Plex Framework 2）。不能写 f-string、`pathlib`、py3 专属语法；`localmedia.py` 里还在用 `has_key()`，别顺手“现代化”。
 - Plex 侧可用对象：`Agent.Movies` / `metadata` / `media` / `Prefs` / `Proxy` / `Log`；本地调试靠 `plexhints`（未安装时走 else 分支导入）。
-- 改完必须自测：`utils.get_badge_type()` 对 `-C / -U / -UC / -LTX / -UHD` 等样例的判断，可用桩模块绕过 `constants.py` 对 `plexhints` 的依赖。
+- 改完必须自测：`python _subrule/test_badge_rule.py`（70 项，含 `_LTX` / `__restored` / `-BasicVSR++` / `-UHD` 负例）与 `python _subrule/test_subtitle_rule.py`；也可用桩模块绕过 `constants.py` 对 `plexhints` 的依赖直接调 `utils.get_badge_type()`。
 - 已知但未修的问题（上游遗留）：`requests.Session` 无 timeout；`translate_text` 在全局锁内 `sleep(1s)`；演员头像逐个请求 Gfriends（N+1）；`score * 2.0` 隐含 5 分制假设。
 - 关联仓库：服务端镜像用 [sayaxia/metatube-sdk-go](https://github.com/sayaxia/metatube-sdk-go)（含 LTX 后缀归一化 + 三张内嵌角标）。
 
