@@ -102,6 +102,7 @@ KEY_GENRE_SUBSTITUTION_TABLE = 'genre_substitution_table'
 KEY_TRANSLATION_MODE = 'translation_mode'
 KEY_TRANSLATION_ENGINE = 'translation_engine'
 KEY_TRANSLATION_ENGINE_PARAMETERS = 'translation_engine_parameters'
+KEY_TRANSLATION_BAIDU_LLM = 'translation_baidu_llm'
 
 # Translation Enums
 TRANSLATION_MODE_DISABLED = 'Disabled'

@@ -91,6 +91,26 @@ def table_substitute(table, items):
     return [(table[i.upper()] if i.upper() in table else i) for i in items]
 
 
+def resolve_model_type(params, use_llm):
+    """Pick the BaiduAI ``model_type`` from the Plex switch.
+
+    BaiduAI exposes two models behind one endpoint: ``nmt`` (machine
+    translation, 1M free characters per month for personal-certified
+    accounts) and ``llm`` (large-model translation, 1M testing quota).
+    The switch only fills in a default: an explicit ``baidu-model-type``
+    in the parameter table always wins, so power users keep full control.
+
+    Returns the value to send, or ``None`` when the caller should leave the
+    parameter table untouched.
+    """
+    for key in params:
+        if key.lower() == 'baidu-model-type':
+            return None
+    if '{0}'.format(use_llm).strip().lower() in ('1', 'true', 'yes', 'on'):
+        return 'llm'
+    return 'nmt'
+
+
 # Plex runs plug-ins with a trimmed ``builtins``: ``any`` and ``bytes`` are
 # both missing there (verified against PMS Plugin Logs, which logged
 # "global name 'any' is not defined" and later "global name 'bytes' is not

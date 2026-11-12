@@ -19,6 +19,21 @@ else:  # the code is running outside of Plex
 TRANSLATOR_LOCK = threading.Lock()
 
 
+def baidu_llm_switch():
+    """Read the BaiduAI model switch; missing prefs mean "off".
+
+    Plex builds ``Prefs`` when the bundle loads, so a bundle that adds the
+    switch while an older ``Preferences`` file is still in place raises
+    KeyError - never let that break a translation.
+    """
+    try:
+        return Prefs[KEY_TRANSLATION_BAIDU_LLM]
+    except Exception:
+        Log.Warn('Preference {key} is not available, using machine translation'
+                 .format(key=KEY_TRANSLATION_BAIDU_LLM))
+        return None
+
+
 def translate_text(text, lang, fallback=None):
     with TRANSLATOR_LOCK:
 
@@ -38,6 +53,15 @@ def translate_text(text, lang, fallback=None):
 
         engine = Prefs[KEY_TRANSLATION_ENGINE]
         params = utils.parse_table(Prefs[KEY_TRANSLATION_ENGINE_PARAMETERS], origin_key=True)
+
+        # BaiduAI has two models on one endpoint: nmt (machine translation)
+        # and llm (large-model translation). The switch decides which one,
+        # unless the parameter table pins baidu-model-type explicitly.
+        if engine.lower() == 'baiduai':
+            model_type = utils.resolve_model_type(params, baidu_llm_switch())
+            if model_type:
+                params['baidu-model-type'] = model_type
+                Log.Info('BaiduAI model type: {model}'.format(model=model_type))
 
         forced_lang = params.pop('to', None)
         if forced_lang:

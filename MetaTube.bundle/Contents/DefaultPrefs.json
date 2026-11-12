@@ -194,5 +194,11 @@
     "label": "Translation engine parameters",
     "type": "text",
     "default": ""
+  },
+  {
+    "id": "translation_baidu_llm",
+    "label": "BaiduAI: use LLM translation (off = machine translation)",
+    "type": "bool",
+    "default": "false"
   }
 ]
