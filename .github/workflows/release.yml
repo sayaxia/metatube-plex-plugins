@@ -10,6 +10,7 @@ on:
       - 'main'
     paths:
       - '.github/workflows/release.yml'
+      - 'scripts/check_plex_sandbox.py'
       - '*.bundle/**'
   workflow_dispatch:
 
@@ -37,6 +38,10 @@ jobs:
           set -e
           find . -name '__pycache__' -type d -prune -exec rm -rf {} + || true
           python3 -m py_compile MetaTube.bundle/Contents/Code/*.py
+          # RestrictedPython rejects any bound name starting with "_"; py_compile
+          # cannot catch it, and it kills the whole plug-in at start-up.
+          python3 scripts/check_plex_sandbox.py --self-test
+          python3 scripts/check_plex_sandbox.py
           python3 -c "import json;p={x['id']:x for x in json.load(open('MetaTube.bundle/Contents/DefaultPrefs.json',encoding='utf-8'))};assert all(k in p for k in ['enable_badges','badge_url','badge_url_u','badge_url_uc']),'missing prefs';print('prefs OK ->',p['badge_url']['default'],p['badge_url_u']['default'],p['badge_url_uc']['default'])"
           grep -q 'def get_badge_type' MetaTube.bundle/Contents/Code/utils.py
           grep -q 'get_badge_name' MetaTube.bundle/Contents/Code/__init__.py

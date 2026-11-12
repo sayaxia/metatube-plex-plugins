@@ -184,7 +184,8 @@
       "Google",
       "GoogleFree",
       "DeepL",
-      "OpenAI"
+      "OpenAI",
+      "BaiduAI"
     ],
     "default": "Baidu"
   },

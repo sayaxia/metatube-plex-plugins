@@ -170,7 +170,9 @@ zip -r MetaTubeHelper.bundle.zip MetaTubeHelper.bundle/
 
 - **运行环境是 Python 2.7**（Plex Framework 2）。不能写 f-string、`pathlib`、py3 专属语法；`localmedia.py` 里还在用 `has_key()`，别顺手“现代化”。
 - Plex 侧可用对象：`Agent.Movies` / `metadata` / `media` / `Prefs` / `Proxy` / `Log`；本地调试靠 `plexhints`（未安装时走 else 分支导入）。
-- 改完必须自测：`python _subrule/test_badge_rule.py`（74 项，含 `_LTX` / `__restored` / `-BasicVSR++` / `_restored_wm` / `.LTX_wm` / `-UHD` 负例、`_wm` 单独不成角标）与 `python _subrule/test_subtitle_rule.py`；也可用桩模块绕过 `constants.py` 对 `plexhints` 的依赖直接调 `utils.get_badge_type()`。
+- 改完必须自测：
+  - `python3 scripts/check_plex_sandbox.py --self-test && python3 scripts/check_plex_sandbox.py`：RestrictedPython 下划线标识符扫描（含好/坏样本自检，合法的 `__init__` / `__str__` 不误报）。**CI 打包前也会跑**，一旦出现 `_BADGE_TOKEN` 这类名字直接让构建失败，不会再把启动不了的 bundle 发成 Release。
+  - 角标规则回归在开发工作区的 `_subrule/test_badge_rule.py`（75 项，含 `_LTX` / `__restored` / `-BasicVSR++` / `_restored_wm` / `.LTX_wm` / `-UHD` 负例、`_wm` 单独不成角标）与 `_subrule/test_subtitle_rule.py`；也可用桩模块绕过 `constants.py` 对 `plexhints` 的依赖直接调 `utils.get_badge_type()`。
 - 已知但未修的问题（上游遗留）：`requests.Session` 无 timeout；`translate_text` 在全局锁内 `sleep(1s)`；演员头像逐个请求 Gfriends（N+1）；`score * 2.0` 隐含 5 分制假设。
 - 关联仓库：服务端镜像用 [sayaxia/metatube-sdk-go](https://github.com/sayaxia/metatube-sdk-go)（含 LTX 后缀归一化 + 三张内嵌角标）。
 
