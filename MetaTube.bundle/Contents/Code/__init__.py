@@ -7,7 +7,7 @@ import utils
 from api_client import api
 from constants import *
 from provider_id import ProviderID
-from translator import translate_text
+from translator import translate_text, protected_genres, mm_get, mm_put
 
 # plex debugging
 try:
@@ -268,9 +268,47 @@ class MetaTubeAgent(Agent.Movies):
 
         pid = ProviderID.Parse(metadata.id)
         Log.Info('Get movie info: {0:s}'.format(pid))
+        number = utils.normalize_number(pid.id)
 
-        # API Request
-        m = api.get_movie_info(provider=pid.provider, id=pid.id)
+        # API Request. A dead provider must not abort the whole update: Plex
+        # silently reverts the item to its first-scrape metadata (raw Japanese)
+        # when the agent throws, so look the number up on another provider first.
+        try:
+            m = api.get_movie_info_or_fallback(provider=pid.provider, id=pid.id)
+        except Exception as e:
+            # Even the fallback found nothing. Replaying the last Chinese write
+            # is the only way to keep the item out of the Japanese first scrape.
+            Log.Warn('All providers failed for {pid}: {error}'
+                     .format(pid=pid, error=e))
+            saved = mm_get(number)
+            if not saved:
+                Log.Warn('No remembered metadata for {number}, item left untouched'
+                         .format(number=number))
+                return metadata
+            try:
+                metadata.title = saved.get('t') or metadata.title
+                metadata.summary = saved.get('s') or ''
+                metadata.original_title = saved.get('o') or ''
+                genres = saved.get('g') or []
+                if genres:
+                    metadata.genres.clear()
+                    for genre in genres:
+                        metadata.genres.add(genre)
+                actors = saved.get('a') or []
+                if actors:
+                    metadata.roles.clear()
+                    for actor in actors:
+                        role = metadata.roles.new()
+                        role.name = actor
+                if saved.get('r'):
+                    metadata.rating = saved.get('r') * 2.0
+                    metadata.rating_image = self.get_rating_image(metadata.rating)
+            except Exception as restore_error:
+                Log.Warn('Restore from memory failed for {number}: {error}'
+                         .format(number=number, error=restore_error))
+            Log.Info('Metadata restored from memory for {number}: {title}'
+                     .format(number=number, title=metadata.title))
+            return metadata
 
         original_title = m.title
         release_date = (m.release_date.strftime('%Y-%m-%d')
@@ -331,6 +369,20 @@ class MetaTubeAgent(Agent.Movies):
         if Prefs[KEY_TRANSLATION_MODE] != TRANSLATION_MODE_DISABLED:
             self.translate_movie_info(m, lang=lang)
 
+        # A healthy but sparse source must not shrink this item: a provider that
+        # just died usually carried more text than the one we fell back to.
+        # Compare against the last Chinese write and keep the fuller side.
+        saved = None
+        try:
+            saved = (mm_get(utils.normalize_number(m.number))
+                     or mm_get(number))
+            if saved:
+                m.summary = utils.keep_richer_text(m.summary, saved.get('s'))
+                m.actors = utils.keep_richer_list(m.actors, saved.get('a'))
+        except Exception as e:
+            Log.Warn('Memory merge failed for {id}: {error}'
+                     .format(id=m.id, error=e))
+
         # Title
         metadata.title = (Prefs[KEY_TITLE_TEMPLATE]
                           if Prefs[KEY_ENABLE_TITLE_TEMPLATE]
@@ -350,6 +402,11 @@ class MetaTubeAgent(Agent.Movies):
         )
 
         # Basic Metadata
+        # A title that still carries kana means every engine failed; the last
+        # Chinese write is better than showing the provider's Japanese text.
+        if saved and utils.genre_needs_translation(utils.to_text(metadata.title)):
+            Log.Info('Title kept from memory for {number}'.format(number=number))
+            metadata.title = saved.get('t') or metadata.title
         metadata.summary = m.summary
         metadata.original_title = original_title
 
@@ -377,41 +434,66 @@ class MetaTubeAgent(Agent.Movies):
         if m.runtime:
             metadata.duration = m.runtime * 60 * 1000  # millisecond
 
-        # Clear Ratings
-        metadata.rating = 0.0
-        metadata.audience_rating = 0.0
-        metadata.rating_image = None
-        metadata.audience_rating_image = None
-        # Clear Reviews
-        metadata.reviews.clear()
         # Ratings & Reviews
-        if Prefs[KEY_ENABLE_RATINGS] and m.score:
-            metadata.rating = m.score * 2.0
-            metadata.rating_image = self.get_rating_image(metadata.rating)
+        # Wiping is reserved for the two cases where the user asked for it (the
+        # pref is off). A sparse source - or a dead provider that falls back to
+        # one answering with score 0 - must not delete what Plex already holds:
+        # the score we want is the provider's, then the remembered one, and only
+        # then nothing.
+        ratings_on = Prefs[KEY_ENABLE_RATINGS]
+        reviews_on = Prefs[KEY_ENABLE_REVIEWS]
+        if not ratings_on:
+            metadata.rating = 0.0
+            metadata.rating_image = None
+            metadata.audience_rating = 0.0
+            metadata.audience_rating_image = None
+        else:
+            score = m.score
+            if not score and saved:
+                score = saved.get('r') or 0
+                if score:
+                    Log.Info('Rating kept from memory for {number}'
+                             .format(number=number))
+            if score:
+                metadata.rating = score * 2.0
+                metadata.rating_image = self.get_rating_image(metadata.rating)
 
-            if Prefs[KEY_ENABLE_REVIEWS]:
-                try:
-                    reviews = api.get_movie_reviews(m.provider, m.id, homepage=m.homepage)
-                except Exception as e:
-                    Log.Warn('Get reviews for {id} failed {error}'.format(id=m.id, error=e))
-                else:
-                    if Prefs[KEY_TRANSLATION_MODE] != TRANSLATION_MODE_DISABLED:
-                        self.translate_reviews(reviews, lang=lang)
-                    for review in reviews:
-                        r = metadata.reviews.new()
-                        r.author = review.author
-                        r.source = m.provider
-                        r.image = self.get_review_image(review.score * 2)
-                        r.link = m.homepage
-                        r.text = review.comment
-                        # review.title is intentionally unused; do not assign
-                        # it to "_" - RestrictedPython rejects underscore names.
+        fetched_reviews = None
+        if ratings_on and reviews_on and m.score:
+            try:
+                fetched_reviews = api.get_movie_reviews(
+                    m.provider, m.id, homepage=m.homepage)
+            except Exception as e:
+                Log.Warn('Get reviews for {id} failed {error}, keeping existing'
+                         .format(id=m.id, error=e))
 
-                    # Audience Rating
-                    scores = [i.score for i in reviews if i.score > 0]
-                    metadata.rating_count = len(scores)
-                    metadata.audience_rating = utils.average(scores) * 2
-                    metadata.audience_rating_image = self.get_audience_rating_image(metadata.audience_rating)
+        if not reviews_on:
+            metadata.reviews.clear()
+            metadata.audience_rating = 0.0
+            metadata.audience_rating_image = None
+            metadata.rating_count = 0
+        elif fetched_reviews:
+            metadata.reviews.clear()
+            if Prefs[KEY_TRANSLATION_MODE] != TRANSLATION_MODE_DISABLED:
+                self.translate_reviews(fetched_reviews, lang=lang)
+            for review in fetched_reviews:
+                r = metadata.reviews.new()
+                r.author = review.author
+                r.source = m.provider
+                r.image = self.get_review_image(review.score * 2)
+                r.link = m.homepage
+                r.text = review.comment
+                # review.title is intentionally unused; do not assign
+                # it to "_" - RestrictedPython rejects underscore names.
+
+            # Audience Rating
+            scores = [i.score for i in fetched_reviews if i.score > 0]
+            metadata.rating_count = len(scores)
+            metadata.audience_rating = utils.average(scores) * 2
+            metadata.audience_rating_image = self.get_audience_rating_image(metadata.audience_rating)
+        else:
+            Log.Info('Reviews kept for {id}: nothing usable from the provider'
+                     .format(id=m.id))
 
         # Director
         metadata.directors.clear()
@@ -435,9 +517,29 @@ class MetaTubeAgent(Agent.Movies):
                 metadata.collections.add(collection)
 
         # Genres
-        metadata.genres.clear()
-        for genre in set(m.genres):
-            metadata.genres.add(genre)
+        # Same guard as the cast block above, plus a Chinese gate: the provider
+        # answers in Japanese and the substitution table only covers the labels
+        # it was taught. translator.translate_genres translates the rest through
+        # the normal chain and drops what still comes back Japanese or polluted;
+        # when nothing survives we leave the item's existing genres alone,
+        # because Plex keeps whatever the agent did not reset. A provider that
+        # answers in Japanese - or a refresh that fails outright - can therefore
+        # no longer leave Japanese labels behind.
+        try:
+            genres = protected_genres(m.genres, lang, m.number)
+        except Exception as e:
+            # Same rule as the filename block: never let this abort the update.
+            # An empty list below leaves the item's existing genres in place.
+            Log.Warn('Translate genres failed for {id}: {error}'
+                     .format(id=m.id, error=e))
+            genres = []
+        if genres:
+            metadata.genres.clear()
+            for genre in genres:
+                metadata.genres.add(genre)
+        else:
+            Log.Warn('Genres kept unchanged for {id}: no usable label'
+                     .format(id=m.id))
 
         # Tags
         metadata.tags.clear()
@@ -529,5 +631,20 @@ class MetaTubeAgent(Agent.Movies):
             )
             metadata.extras.add(trailer)
             Log.Debug('Trailer added: {trailer}'.format(trailer=trailer_url))
+
+        # Remember what Chinese text actually landed, so a later refresh where
+        # every provider is down can replay it instead of showing the Japanese
+        # first scrape. Never let this abort an otherwise good update.
+        try:
+            mm_put(utils.normalize_number(m.number),
+                   utils.to_text(metadata.title),
+                   utils.to_text(metadata.summary)[:2000],
+                   utils.to_text(metadata.original_title),
+                   metadata.genres,
+                   m.actors,
+                   m.score)
+        except Exception as e:
+            Log.Warn('Save metadata memory failed for {id}: {error}'
+                     .format(id=m.id, error=e))
 
         return metadata

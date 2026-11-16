@@ -36,6 +36,23 @@ TM_LIMIT = 4000
 TM_TEXT_LIMIT = 800
 TM_FLUSH_INTERVAL = 20.0
 
+# Genre memory: the Chinese genre set last written for a movie number. Genres
+# reach the plug-in in Japanese, and a movie whose provider died can come back
+# with labels the substitution table has never seen - those used to be written
+# straight into Plex. The memory is what the item had before, so an unusable
+# batch can be replaced by the known Chinese set instead of raw Japanese.
+GM_NAME = 'genre_memory.json'
+GM_LIMIT = 5000
+GM_LABEL_LIMIT = 40
+
+# Metadata memory: the last Chinese title / summary / genres actually written.
+# When every provider is down, update() used to throw and Plex restored the
+# first-scrape metadata (raw Japanese). Replaying this entry keeps the Chinese
+# text instead - the real last line of defence.
+MM_NAME = 'metadata_memory.json'
+MM_LIMIT = 5000
+MM_SUMMARY_LIMIT = 2000
+
 # The large-model pool is a one-off quota that does not refill, so it is spent
 # deliberately: only on a polluted short title, and only up to the budget.
 LLM_SOURCE_CHARS = 120
@@ -53,6 +70,22 @@ TM = {
 LLM = {
     'loaded': False,
     'used': 0,
+}
+
+GM = {
+    'loaded': False,
+    'enabled': False,
+    'storage': None,
+    'path': None,
+    'data': {},
+}
+
+MM = {
+    'loaded': False,
+    'enabled': False,
+    'storage': None,
+    'path': None,
+    'data': {},
 }
 
 
@@ -179,6 +212,162 @@ def tm_flush(force=False):
     if storage_write(TM['storage'], TM['path'], TM['data']):
         TM['dirty'] = 0
         TM['last'] = now
+
+
+def gm_ready():
+    """Load the genre memory once per process; False means "run without it"."""
+    if GM['loaded']:
+        return GM['enabled']
+    GM['loaded'] = True
+
+    storage = plugin_storage()
+    if storage is None:
+        Log.Warn('Genre memory unavailable outside Plex, continuing without it')
+        return False
+
+    path = storage_path(storage, GM_NAME)
+    if not path:
+        Log.Warn('Genre memory has no writable path, continuing without it')
+        return False
+
+    GM['storage'] = storage
+    GM['path'] = path
+    data = storage_read(storage, path)
+    if isinstance(data, dict):
+        GM['data'] = data
+    GM['enabled'] = True
+    Log.Info('Genre memory loaded: {count} movies'
+             .format(count=len(GM['data'])))
+    return True
+
+
+def gm_get(number):
+    """Chinese genres remembered for this movie number, or None."""
+    if not number or not gm_ready():
+        return None
+    labels = GM['data'].get(number)
+    if not labels:
+        return None
+    for label in labels:
+        if utils.genre_needs_translation(label):
+            # Written by an older build (or by hand); not trustworthy.
+            Log.Warn('Genre memory entry rejected for {number}: {label}'
+                     .format(number=number, label=label))
+            GM['data'].pop(number, None)
+            gm_save()
+            return None
+    return list(labels)
+
+
+def gm_put(number, genres):
+    """Remember the Chinese genre set written for this movie number."""
+    if not number or not genres or not gm_ready():
+        return
+    labels = []
+    count = 0
+    for genre in genres:
+        labels.append(genre)
+        count = count + 1
+        if count >= GM_LABEL_LIMIT:
+            break
+    GM['data'][number] = labels
+    if len(GM['data']) > GM_LIMIT:
+        for stale in list(GM['data'])[:GM_LIMIT // 10]:
+            GM['data'].pop(stale, None)
+        Log.Info('Genre memory trimmed to {count} movies'
+                 .format(count=len(GM['data'])))
+    gm_save()
+
+
+def gm_save():
+    if not GM['enabled']:
+        return
+    storage_write(GM['storage'], GM['path'], GM['data'])
+
+
+def mm_ready():
+    """Load the metadata memory once per process; False means "run without it"."""
+    if MM['loaded']:
+        return MM['enabled']
+    MM['loaded'] = True
+
+    storage = plugin_storage()
+    if storage is None:
+        Log.Warn('Metadata memory unavailable outside Plex, continuing without it')
+        return False
+
+    path = storage_path(storage, MM_NAME)
+    if not path:
+        Log.Warn('Metadata memory has no writable path, continuing without it')
+        return False
+
+    MM['storage'] = storage
+    MM['path'] = path
+    data = storage_read(storage, path)
+    if isinstance(data, dict):
+        MM['data'] = data
+    MM['enabled'] = True
+    Log.Info('Metadata memory loaded: {count} movies'
+             .format(count=len(MM['data'])))
+    return True
+
+
+def mm_get(number):
+    """Last Chinese metadata written for this number, or None."""
+    if not number or not mm_ready():
+        return None
+    entry = MM['data'].get(number)
+    if not isinstance(entry, dict) or not entry.get('t'):
+        return None
+    for label in entry.get('g') or []:
+        if utils.genre_needs_translation(label):
+            # Written by an older build (or by hand); not trustworthy.
+            Log.Warn('Metadata memory entry rejected for {number}: {label}'
+                     .format(number=number, label=label))
+            MM['data'].pop(number, None)
+            mm_save()
+            return None
+    return entry
+
+
+def mm_put(number, title, summary, original_title, genres, actors=None, score=0):
+    """Remember the Chinese metadata written for this number."""
+    if not number or not title or not mm_ready():
+        return
+    labels = []
+    count = 0
+    for genre in genres or []:
+        labels.append(genre)
+        count = count + 1
+        if count >= GM_LABEL_LIMIT:
+            break
+    cast = []
+    count = 0
+    for actor in actors or []:
+        cast.append(actor)
+        count = count + 1
+        if count >= GM_LABEL_LIMIT:
+            break
+    MM['data'][number] = {
+        't': title,
+        's': summary or u'',
+        'o': original_title or u'',
+        'g': labels,
+        'a': cast,
+        'r': score or 0,
+    }
+    if len(MM['data']) > MM_LIMIT:
+        for stale in list(MM['data'])[:MM_LIMIT // 10]:
+            MM['data'].pop(stale, None)
+        Log.Info('Metadata memory trimmed to {count} movies'
+                 .format(count=len(MM['data'])))
+    mm_save()
+
+
+def mm_save():
+    if not MM['enabled']:
+        return
+    storage_write(MM['storage'], MM['path'], MM['data'])
 
 
 def llm_used():
@@ -415,3 +604,86 @@ def translate_text(text, lang, fallback=None, field=None, cache_key=None):
                           engines=', '.join(engines)))
         tm_flush()
         return fallback
+
+
+def translate_genres(genres, lang, report=None):
+    """Filter the provider's genre labels down to the ones safe to write in Plex.
+
+    Genres arrive in Japanese and the substitution table only knows the labels
+    it was taught; whatever still carries kana goes through the same engine
+    chain and quality gate as the title, cached in the memory by label (genres
+    repeat across the whole library, so one translation serves every item).
+
+    A label that stays Japanese or comes back polluted is dropped rather than
+    written, and an empty result tells the caller to leave the item's existing
+    genres untouched - that is what stops a provider answering in Japanese (or
+    a failed refresh) from leaving Japanese labels behind.
+
+    ``report`` (a dict, optional) receives ``dropped`` - how many labels could
+    not be converted - so the caller can decide that the batch is unusable.
+    """
+    result = []
+    seen = set()
+    dropped = 0
+
+    for genre in genres or []:
+        genre = utils.to_text(genre).strip()
+        if not genre or genre in seen:
+            continue
+        seen.add(genre)
+
+        if not utils.genre_needs_translation(genre):
+            result.append(genre)
+            continue
+
+        if Prefs[KEY_TRANSLATION_MODE] == TRANSLATION_MODE_DISABLED:
+            # Translation is off on purpose; the user accepts the original.
+            result.append(genre)
+            continue
+
+        translated = translate_text(genre, lang=lang, fallback=None,
+                                    field='genre',
+                                    cache_key='genre:{0}'.format(genre))
+        if not translated:
+            dropped = dropped + 1
+            Log.Warn('Genre dropped, no usable Chinese label: {genre}'
+                     .format(genre=genre))
+            continue
+        result.append(translated)
+
+    if report is not None:
+        report['dropped'] = dropped
+    return result
+
+
+def protected_genres(genres, lang, number):
+    """Genres to write into Plex, with the genre memory as the last resort.
+
+    A dead provider does not answer with nothing - it answers with raw
+    Japanese labels, and the ones the substitution table has never seen used to
+    land in Plex as-is, which is what "the genres went back to Japanese after a
+    refresh" looks like. When part of the batch cannot be converted, the set
+    remembered for this movie number (already Chinese) wins instead.
+    """
+    report = {'dropped': 0}
+    labels = translate_genres(genres, lang, report)
+
+    if Prefs[KEY_TRANSLATION_MODE] == TRANSLATION_MODE_DISABLED:
+        return labels
+
+    remembered = gm_get(number)
+    if remembered:
+        lost = []
+        for old in remembered:
+            if old not in labels:
+                lost.append(old)
+        if not labels or report['dropped'] > 0 or lost:
+            Log.Warn('Genres restored from memory for {number}: '
+                     '{dropped} unusable, {lost} missing label(s)'
+                     .format(number=number, dropped=report['dropped'],
+                             lost=len(lost)))
+            return remembered
+
+    if labels:
+        gm_put(number, labels)
+    return labels

@@ -179,6 +179,50 @@ class APIClient(object):
                 lazy=lazy),
             require_auth=True))
 
+    def get_movie_info_or_fallback(self, provider, id, lazy=None):
+        """Fetch movie info, falling back to another provider by number.
+
+        When a provider dies (its module starts answering 500/404) Plex's update
+        throws and the item silently reverts to the metadata Plex cached from the
+        first scrape - which is the raw Japanese text this fork is meant to
+        translate. Looking the same number up on a healthy provider keeps the
+        update alive, so nothing is reverted.
+        """
+        try:
+            return self.get_movie_info(provider=provider, id=id, lazy=lazy)
+        except APIError as error:
+            Log.Warn('Provider {0}:{1} failed ({2}), trying fallback'
+                     .format(provider, id, error))
+            info = self.fallback_movie_info(provider=provider, id=id)
+            if info is None:
+                raise error
+            return info
+
+    def fallback_movie_info(self, provider, id):
+        """Return MovieInfoObject from a healthy provider, or None."""
+        number = utils.normalize_number(id)
+        try:
+            results = self.search_movie(q=number)
+        except Exception as error:
+            Log.Warn('Fallback search failed for {0}: {1}'
+                     .format(number, error))
+            return None
+
+        for item in utils.pick_fallback_candidates(results, provider, number):
+            try:
+                info = self.get_movie_info(provider=item.provider, id=item.id)
+            except Exception as error:
+                Log.Warn('Fallback provider {0}:{1} failed: {2}'
+                         .format(item.provider, item.id, error))
+                continue
+            Log.Info('Provider fallback: {0}:{1} -> {2}:{3}'
+                     .format(provider, id, info.provider, info.id))
+            return info
+
+        Log.Warn('No healthy provider for {0} (was {1}:{2})'
+                 .format(number, provider, id))
+        return None
+
     def get_movie_reviews(self, provider, id, homepage=None, lazy=None):
         return [MovieReviewObject(**data) for data in self.get_json(
             url=self.prepare_url(

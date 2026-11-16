@@ -193,3 +193,107 @@
   - 面板是静态表单：切引擎只改枚举自身，不会改写参数框 —— 这解释了用户看到的"切换引擎 API 不变"。
 - 待办/风险：DeepL 免费额度已用尽（用户决定 2026-12 再补），期间每次调用固定 403；
   `translation_fallback_parameters` 里也没有 `deepl.auth_key`，补额度时要一起补。
+## 2026-11-17 00:45 · Doubao · 流派中文保护上线（含一次线上 bug 与存量修复）
+
+- 背景：服务端返回的流派是日文（`人妻・主婦`/`淫乱・ハード系`/`ハイビジョン`），
+  以前只有类型替换表能改写，表里没有的原样写进 Plex；旧片 provider 失效后刷新，
+  Plex 回退缓存，看起来就是"流派又变回日文"。
+- 改动（`ab6817c` + `65d64c9` + `56f63d7`）：
+  - `utils.genre_needs_translation`：只有真假名才算日文，`・`(U+30FB) 这种借用标点不算；
+  - `translator.translate_genres` → `protected_genres`：带假名的标签走三层链 + L1，
+    翻不出来就丢；每番号的中文流派存 `genre_memory.json`，整批不可用或比记忆少就整组用记忆；
+  - `__init__.py`：整批为空时**不清空** genres（与角色块同一条铁律），并给流派块套 try/except；
+  - `scripts/check_plex_sandbox.py` 新增"模块调用了但没 import"检查（AST）。
+- 实测踩到的两个坑：
+  - `ab6817c` 在 `__init__.py` 写了 `translator.translate_genres`，但只 `from translator import
+    translate_text`，线上 00:32 直接 `NameError`，整次 update 中止。已修，并让检查脚本能拦住。
+  - L1 把 `・`(U+30FB) 算作假名 → `淫乱・硬核系` 被判"没翻译"而丢弃。改成 `KANA_TEXT_RANGES`。
+- 验证：
+  - 离线：py_compile / 沙箱 8 文件 / 翻译 **48 项** / 角标 75 / 字幕 3 全过；
+    坏版本反向验证过检查脚本能命中 `__init__.py:446`。
+  - 线上：覆盖 3 个文件（备份 `.bak.20261117_003758`），刷新 43391 →
+    流派仍是整组中文、无异常，`genre_memory.json` 生成（210 字节，按番号 `SONE-017`）。
+  - 存量：全库逐条 GET 复测，「仍与映射表不符 0 部」；剩 6 部带 `新娘` 被工具判为日文（疑似误报）。
+- 存量修复：`ratingKey=18049`（FANZA:ipx259，服务端对该 id 返回 500 = provider 失效）
+  当时流派是 `単体作品 / デジモ / サンプル動画 / 淫語` 等日文，用 plex-genre-remap 工具
+  单条改写成 `美少女 / 单体作品 / 痴女 / M男 / 试看视频 / 淫语`。
+- 部署/发版：**仅热修线上，未推送 GitHub**（等 SAYA 确认）。
+- 待办/风险：Plex 列表接口每部只回 2 个 Genre，统计流派必须逐条取详情；
+  `新娘` 那 6 部要不要一起处理待定。
+## 2026-11-17 00:57 · Doubao · provider 失效时按番号换源（根治"刷新退回日文"）
+
+- 现场证据：`00:49:07` 刷新 `FANZA:ipx259` → `APIError: 500 <response is null>`
+  → `Exception in the update function`，流派随即回到 `単体作品 / デジモ / サンプル動画 / 淫語`。
+  结论：**不是插件把日文写回去，是 Plex 在 agent 抛异常时退回首次刮削的元数据**，
+  连用手工 HTTP PUT 改好的中文流派也被一起覆盖。
+- 换源可行性实测：`FANZA`/`JavBus(ipx259)` 都 500；`JavBus/IPX-259`、`AVBASE/idp:IPX-259`、
+  `JAV321/ipx00259` 均 200；`/v1/movies/search?q=IPX-259` 一次返回 3 个源（AVBASE/JavBus/JAV321）。
+- 改动：
+  - `utils.normalize_number()`：`ipx259`→`IPX-259`、`sone00017`→`SONE-017`（去前导零、补 3 位）；
+  - `utils.pick_fallback_candidates()`：番号必须一致、跳过刚失败的源、去重、最多 4 个；
+  - `api_client.get_movie_info_or_fallback()` / `fallback_movie_info()`：主源失败→搜索→逐个试；
+    **全部失败才重新抛原异常**（保持"确实没数据就不写"的原行为）；
+  - `__init__.py update()` 改用它。换源后 `m.provider/m.id` 就是新源，海报/预告/评论自然跟上。
+- 验证：
+  - 离线 48 → **59 项**（新增番号归一化 7 项 + 候选挑选 4 项）全绿；py_compile / 沙箱 8 文件 OK。
+  - 真机：刷新 `18049`（IPX-259）→ `Provider fallback: FANZA:ipx259 -> AVBASE:idp:IPX-259`，
+    流派 = `试看视频 / 美少女 / 痴女 / 淫语 / M男 / 单体作品`（`デジモ`/`ハイビジョン`/`独占配信` 按表删除）；
+    `genre_memory.json` 里写入 `IPX-259`；无异常。
+  - 回归：刷新正常条目 `43391`（SONE-017）→ 流派仍为整组中文，日志**没有** fallback 行，
+    海报/预告照常；仅 `reviews 404` 属既有行为。
+- 部署：NAS 覆盖 `__init__.py`/`api_client.py`/`utils.py`，备份后缀 `.bak.20261117_0053xx`。
+- 未推送 GitHub（等 SAYA 确认）。
+## 2026-11-17 01:06 · Doubao · 保底从"换源"升级为"不降级"（记忆兜住稀疏数据）
+
+- SAYA 指出的问题：换源只能保证"还有源能答"，能答的源往往**数据更少**（失效源才是信息最全的）。
+  所以保底要按"信息量"兜，而不是只看"有没有拿到数据"。
+- 改动：
+  - `translator.MM` / `mm_get` / `mm_put` / `mm_save`：按番号记 `title/summary/genres/actors`
+    到 `metadata_memory.json`（5000 条上限，含假名流派的条目视为不可信并丢弃）；
+  - `utils.keep_richer_text` / `utils.keep_richer_list`：新值空或不足一半长度→用旧的；
+    列表更少→用旧的（空阵容永不覆盖）；
+  - `__init__.update`：翻译后与记忆比对——简介取更长的、演员取更全的、标题带假名则用记忆的、
+    流派由 `protected_genres` 与 `genre_memory` 比较；**所有源都失败时不抛异常**，
+    直接用记忆重放 title/summary/genres/actors，只有记忆里也没有才维持原行为。
+- 本人踩的坑（已记进 AGENTS §8）：
+  - 注入模拟钩子时函数名写成 `_simulate_total_outage`，RestrictedPython 报
+    `SyntaxError: "_simulate_total_outage" is an invalid variable name`，整个 bundle 编译失败、
+    插件从此不加载，刷新全是空跑（日志停在 01:00:06）。改名后正常。
+  - 加载失败后改文件也不会重载：覆盖写 `Contents/Info.plist`（字节不变）让 mtime 变化才恢复。
+- 验证：
+  - 离线 64 → **71 项**全绿（新增 keep_richer 7 项）；py_compile / 沙箱 8 文件 OK。
+  - 真机①换源：`FANZA:ipx259` → `AVBASE:idp:IPX-259`，流派整组中文、记忆写入（590 字节）。
+  - 真机②全源失效（注入 `simulateTotalOutage`）：日志
+    `All providers failed for FANZA:ipx259: simulated total outage for test` +
+    `Metadata restored from memory for IPX-259: ...`，流派/标题仍是中文，**无异常**。
+  - 真机③移除钩子后正常刷新：流派 `试看视频/美少女/痴女/淫语/M男/单体作品`，
+    演员 `岬ななみ`，`metadata_memory.json` 625 字节（含演员）。
+- 部署：NAS 覆盖 `__init__.py`/`translator.py`/`utils.py`（备份 `.bak.20261117_01xx`），
+  `api_client.py` 已还原为仓库版本并核过哈希。未推送 GitHub。
+## 2026-11-17 01:55 — P3：评分与评论不被稀疏源清空（`6f816a9`）
+
+- 起因：全库字段体检（6658 部逐条取详情）后给用户优先级表。导演覆盖 2215 部、其中 1119 部带假名；
+  合集 2929 部 / 21839 个值 / 1157 个带假名；`Studio`、`Tag`、`Review` 在 Plex 侧 0 值；
+  `Label` 2 部。用户决定：**导演不用改、合集没有做替换也不用保留**，只做 P3。
+- 实测证据：`FANZA/sone00017` 的 `score=4.69`（Plex `rating=9.4`）；`AVBASE/idp:IPX-259` 的
+  `score=0`。`18049` 换源到 AVBASE 之后评分确实被清零——不是理论问题。
+- 改法（`[评分评语]` 块整体重写）：
+  - `ratings_on` / `reviews_on` 两个开关；**关掉** `Enable ratings` 才清零评分与图标（连 audience 一起）；
+  - 开着时：源有 `m.score` 就写，没有就回落到记忆 `saved['r']`（日志 `Rating kept from memory`）；
+  - 评论只在 `ratings_on and reviews_on and m.score` 时才拉，**拉取失败不 clear**（日志 `... keeping existing`）；
+  - 只有拿到非空 `fetched_reviews` 才 clear + 重建 + 重算 `rating_count`/`audience_rating`，
+    否则记 `Reviews kept for <id>: nothing usable from the provider`；
+  - 关掉 `Enable reviews` 才 clear 并清 audience / ratingCount；
+  - 全源失效的重放分支补了评分恢复（`saved.get('r') * 2.0` + 图标）；
+  - `translator.mm_put` 增 `actors` / `score` 参数，记忆里存 `'a'` / `'r'`。
+- 验证：
+  - 离线 **73 项**全绿（新增 `mm: provider score is remembered`、`mm: cast is remembered`）；
+    py_compile 两文件 OK，沙箱检查 8 文件 OK。
+  - 真机①`43391` 刷新：`rating=9.4` 仍在、`audience` 空、流派 7 个中文；
+    日志 `Get reviews for sone00017 failed ... 404 <provider not fou…` + `Reviews kept for sone00017`，无 Exception。
+  - 真机②`18049` 刷新：`rating=''`（AVBASE 永远 0 且记忆里 `r:0`，无从恢复）、流派 6 个中文不变；
+    `metadata_memory.json` 里 `IPX-259` = `{"a":["岬ななみ"],"g":[6 个中文],"o":"<日文原题>","s":"","r":0,"t":"..."}`。
+  - 观察到的新副作用：`Poster submitted` 之后 AVBASE 海报被 Plex 设为选中，角标合成封面被顶掉
+    （已记进 AGENTS §8，需要刷完重跑 `plex-badge-refresh`）。
+- 部署：NAS 覆盖 `__init__.py`/`translator.py`（备份 `.bak.20261117_0136xx`），
+  字节不变重写 `Contents/Info.plist` 触发重载后验证。

@@ -470,7 +470,15 @@ KANA_UNTRANSLATED_RATIO = 0.15
 TRANSLATION_MIN_RATIO = 0.2
 TRANSLATION_MAX_RATIO = 3.0
 
-KANA_RANGES = ((0x3040, 0x309F), (0x30A0, 0x30FF), (0xFF66, 0xFF9D))
+# Kana ranges used to judge "is this still Japanese". The punctuation-like
+# characters are excluded on purpose: Chinese labels borrowed from Japanese keep
+# the "・" separator (U+30FB, e.g. 淫乱・硬核系) and a translation of a genre
+# label does the same, so counting those as kana would make the gate reject a
+# perfectly good Chinese result (and every 中文 label built with ・).
+KANA_TEXT_RANGES = ((0x3041, 0x3096), (0x30A1, 0x30FA), (0xFF66, 0xFF9D))
+
+# Historical name, still referenced by the regression suite.
+KANA_RANGES = KANA_TEXT_RANGES
 HANGUL_RANGE = (0xAC00, 0xD7AF)
 CJK_RANGES = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF))
 
@@ -535,6 +543,90 @@ def to_text(value):
         return u'{0}'.format(value)
 
 
+def normalize_number(value):
+    """把 provider 的 id 归一成可搜索的番号，例如 ipx259 -> IPX-259。
+
+    Only used when the matched provider is dead and we need to look the same
+    movie up on another provider; never used to re-match an item.
+    """
+    text = to_text(value).strip().upper()
+    match = re.match(r'^([A-Z]+)[-_ ]?0*(\d+)$', text)
+    if not match:
+        return text
+    prefix = match.group(1)
+    digits = match.group(2)
+    width = 3 if len(digits) < 3 else len(digits)
+    return u'{0}-{1}'.format(prefix, digits.zfill(width))
+
+
+def pick_fallback_candidates(results, provider, number, limit=4):
+    """Pick alternate providers for the same number, skipping the one that failed.
+
+    Returns at most `limit` items so a dead provider costs a couple of extra
+    requests instead of scanning every module.
+    """
+    target = normalize_number(number).replace(u'-', u'').upper()
+    failed = to_text(provider).upper()
+    picked = []
+    seen = []
+    for item in results or []:
+        item_provider = to_text(getattr(item, 'provider', u'')).upper()
+        item_id = to_text(getattr(item, 'id', u''))
+        if not item_provider or item_provider == failed:
+            continue
+        key = item_provider + u':' + item_id
+        if key in seen:
+            continue
+        if normalize_number(getattr(item, 'number', u'')).replace(u'-', u'').upper() != target:
+            continue
+        seen.append(key)
+        picked.append(item)
+        if len(picked) >= limit:
+            break
+    return picked
+
+
+def keep_richer_text(new, old):
+    """Never let a sparse source shrink a field: empty loses, halved length loses."""
+    new_text = to_text(new).strip()
+    old_text = to_text(old).strip()
+    if not new_text:
+        return old_text
+    if old_text and len(new_text) * 2 < len(old_text):
+        return old_text
+    return new_text
+
+
+def keep_richer_list(new, old):
+    """Same rule for lists: a source with fewer items must not replace the old set."""
+    new_list = new or []
+    old_list = old or []
+    if len(new_list) >= len(old_list):
+        return new_list
+    return old_list
+
+
+# Same ranges as KANA_TEXT_RANGES above, kept under the old name for the genre
+# gate: a label carrying real kana is Japanese, while 人妻・主妇 keeps the "・"
+# separator and must not be sent to the translator.
+GENRE_KANA_RANGES = KANA_TEXT_RANGES
+
+
+def genre_needs_translation(text):
+    """True when a genre label still carries real Japanese kana.
+
+    Genres reach the plug-in exactly as the provider stores them (e.g.
+    ``人妻・主婦``, ``淫乱・ハード系``, ``ハイビジョン``). The substitution table
+    converts the ones it was taught; this is the test for everything it was
+    not taught, so a Japanese label can never reach Plex unnoticed.
+    Labels made of kanji only (``単体作品``, ``騎乗位``) carry no kana and are
+    left to the substitution table - guessing "this kanji looks Japanese" would
+    translate perfectly good Chinese labels.
+    """
+    text = to_text(text)
+    return charset_ratio(text, GENRE_KANA_RANGES) > 0.0
+
+
 def looks_translated(text, source=None, target=None):
     """Judge whether ``text`` is a usable translation of ``source``.
 
@@ -548,7 +640,7 @@ def looks_translated(text, source=None, target=None):
     if not text:
         return False, 'empty'
 
-    kana = charset_ratio(text, KANA_RANGES)
+    kana = charset_ratio(text, KANA_TEXT_RANGES)
     if kana > KANA_UNTRANSLATED_RATIO:
         return False, 'untranslated (kana {0:.0f}%)'.format(kana * 100)
 

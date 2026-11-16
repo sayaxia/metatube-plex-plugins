@@ -84,6 +84,49 @@ def scan_file(path):
     return visitor.hits
 
 
+def module_usage_hits(path, siblings):
+    """Flag ``sibling.attr`` where ``sibling`` is a bundle module that was never
+    imported in this file.
+
+    ``from translator import translate_text`` binds the function only - the
+    ``translator`` module itself is undefined, so a later ``translator.foo()``
+    raises ``NameError`` inside Plex's update() and aborts the whole metadata
+    update. ``py_compile`` cannot see it and neither can the underscore check.
+    """
+    with io.open(path, encoding='utf-8') as fh:
+        source = fh.read()
+    tree = ast.parse(source, filename=path)
+
+    imported = set()
+    bound = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.add((alias.asname or alias.name).split('.')[0])
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                               ast.ClassDef)):
+            bound.add(node.name)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bound.add(node.id)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                bound.add(name)
+
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        if not isinstance(node.value, ast.Name):
+            continue
+        name = node.value.id
+        if name in siblings and name not in imported and name not in bound:
+            hits.append((path, getattr(node, 'lineno', 0),
+                         '%s.%s' % (name, node.attr)))
+    return hits
+
+
 GOOD_SAMPLE = '''\
 # Dunder methods and reading __name__ are perfectly legal in a Plex plug-in.
 BADGE_TOKEN_PATTERN = r'(U|C)'
@@ -117,16 +160,40 @@ EXPECTED_BAD = set(['_BADGE_TOKEN', '_TOOL_TOKEN', '_', '_helper', '_arg',
                     '_Private', '_os', '_vi'])
 
 
+MODULE_GOOD_SAMPLE = '''\
+import translator
+from utils import parse_table
+from translator import translate_text
+
+def go(text):
+    translator.tm_flush()
+    return translate_text(text) + parse_table(text)
+'''
+
+MODULE_BAD_SAMPLE = '''\
+from translator import translate_text
+
+def go(text):
+    return translator.translate_genres(text)
+'''
+
+
 def self_test():
     """Prove the checker catches bad names without flagging legal dunders."""
     tmp = tempfile.mkdtemp(prefix='plex-sandbox-')
     try:
         good = os.path.join(tmp, 'good.py')
         bad = os.path.join(tmp, 'bad.py')
+        mod_good = os.path.join(tmp, 'mod_good.py')
+        mod_bad = os.path.join(tmp, 'mod_bad.py')
         with io.open(good, 'w', encoding='utf-8') as fh:
             fh.write(GOOD_SAMPLE)
         with io.open(bad, 'w', encoding='utf-8') as fh:
             fh.write(BAD_SAMPLE)
+        with io.open(mod_good, 'w', encoding='utf-8') as fh:
+            fh.write(MODULE_GOOD_SAMPLE)
+        with io.open(mod_bad, 'w', encoding='utf-8') as fh:
+            fh.write(MODULE_BAD_SAMPLE)
         good_hits = scan_file(good)
         bad_hits = scan_file(bad)
         bad_names = set(hit[2] for hit in bad_hits)
@@ -137,8 +204,18 @@ def self_test():
             sys.stderr.write('FAIL: missed bad names: %r\n'
                              % sorted(EXPECTED_BAD - bad_names))
             return False
-        print('OK: self-test clean sample passes, %d/%d forbidden names caught'
-              % (len(bad_names), len(EXPECTED_BAD)))
+        siblings = set(['translator', 'utils'])
+        mod_good_hits = module_usage_hits(mod_good, siblings)
+        mod_bad_hits = module_usage_hits(mod_bad, siblings)
+        if mod_good_hits:
+            sys.stderr.write('FAIL: imported module flagged: %r\n'
+                             % (mod_good_hits,))
+            return False
+        if not mod_bad_hits:
+            sys.stderr.write('FAIL: missing module import not caught\n')
+            return False
+        print('OK: self-test clean sample passes, %d/%d forbidden names caught, '
+              'missing module import caught' % (len(bad_names), len(EXPECTED_BAD)))
         return True
     finally:
         import shutil
@@ -161,24 +238,35 @@ def main(argv):
         return 1
 
     hits = []
+    module_hits = []
     errors = []
     for path in paths:
         try:
             hits.extend(scan_file(path))
+            siblings = set()
+            for other in os.listdir(os.path.dirname(path) or '.'):
+                if other.endswith('.py'):
+                    siblings.add(other[:-3])
+            siblings.discard(os.path.basename(path)[:-3])
+            module_hits.extend(module_usage_hits(path, siblings))
         except (SyntaxError, IOError, OSError) as exc:
             errors.append('%s: %s' % (path, exc))
     for path, lineno, name, kind in hits:
         sys.stderr.write('FAIL %s:%d: %s (%s)\n'
                          % (path, lineno, name, kind))
+    for path, lineno, expr in module_hits:
+        sys.stderr.write('FAIL %s:%d: %s (module never imported)\n'
+                         % (path, lineno, expr))
     for error in errors:
         sys.stderr.write('FAIL %s\n' % error)
-    if hits or errors:
+    if hits or module_hits or errors:
         sys.stderr.write(
-            'FAIL: %d forbidden name(s), %d file error(s) - Plex would '
-            'refuse to start this bundle.\n' % (len(hits), len(errors)))
+            'FAIL: %d forbidden name(s), %d missing import(s), %d file '
+            'error(s) - Plex would refuse to start this bundle or abort '
+            'update().\n' % (len(hits), len(module_hits), len(errors)))
         return 1
-    print('OK: %d file(s) scanned, no RestrictedPython underscore names'
-          % len(paths))
+    print('OK: %d file(s) scanned, no RestrictedPython underscore names, '
+          'no missing module imports' % len(paths))
     return 0
 
 

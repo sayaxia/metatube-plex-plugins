@@ -196,7 +196,33 @@ python C:/Script/metatube/_tools/compare_bundle.py
 - **同番号双版目录**会让整目录改名 SKIP（重名冲突），属正确行为。
 - **多版本**：`C` / `UC` / `U` / `LTX` 大概率互斥，优先级 `LTX > UC > U > C > 无后缀`；
   判断冗余前先比码率，被删方码率更高要降级为"人工确认"。
-- **Plex 会缓存插件代码**：覆盖文件后若行为没变，重启 Plex 而不是反复改代码。
+- **换源不等于够用：数据变少也是"变差"**。挂掉的源往往信息最全，能答的源常常更少。
+  每次成功写入都把中文 title/summary/genres/actors 记进 `metadata_memory.json`
+  （`translator.mm_*`，按番号，最多 5000 条），下次刷新先比对：
+  `utils.keep_richer_text`（空/不足一半长度→用旧的）、`utils.keep_richer_list`（更少→用旧的）、
+  标题带假名→用旧的、流派少于记忆→`protected_genres` 整组用记忆。
+  **所有源都失败时**不要抛异常：`mm_get` 有记录就用它重放（title/summary/genres/actors），
+  没有记录才保持原行为（抛错、Plex 自己回退首次刮削的日文）。
+- **往线上插件注入测试钩子时，模块级名字不能以 `_` 开头**：RestrictedPython 直接把整个 bundle
+  编译失败（`SyntaxError: "_xxx" is an invalid variable name`），插件从此不加载，刷新变成空跑。
+  用完要删掉，并 `py_compile` + `check_plex_sandbox.py` 过一遍。
+- **插件加载失败后不会自己恢复**：改文件也不重载，得让 bundle 的 mtime 变（覆盖写
+  `Contents/Info.plist` 字节不变即可）才会重新编译加载；否则日志一条都不会新增。
+- **Plex 在 agent 抛异常时会回退到"首次刮削"的元数据**：`update()` 里任何未捕获异常都会让条目
+  退回日文原文，手工用 HTTP API 改好的中文流派也会一起被覆盖（实测刷新 `FANZA:ipx259` 复现）。
+  所以 **provider 失效必须换源成功，而不是"报错就完事"**：`api.get_movie_info_or_fallback()`
+  用 `utils.normalize_number()`（`ipx259`→`IPX-259`）去 `movies/search` 找同一番号的健康源
+  （`utils.pick_fallback_candidates()` 去掉刚失败的源、去重、最多 4 个），换源后照常走
+  替换表 + 翻译 + 流派记忆。**不要**改成"失败就写空/写旧值"：Plex 的 title/actors 也会被这把连带毁掉。
+- **流派（genres）也走中文保护**：provider 给的是日文标签，替换表只认识它被教过的那些，
+  剩下的过去会**原样写进 Plex**。现在的链路（`utils.genre_needs_translation` →
+  `translator.translate_genres` → `translator.protected_genres`）：
+  带真假名的标签走三层翻译 + L1，翻不出来就丢；每个番号的中文流派记在
+  `genre_memory.json`，本次标签整批不可用（或比记忆里少）就整组改用记忆，而不是写日文/残缺结果；
+  什么都没有时**不清空** `metadata.genres`（Plex 保留原值），与角色块同一条铁律。
+  判定里 `・`(U+30FB) 不算假名，否则 `淫乱・硬核系` 这种中文标签会被 L1 判成"没翻译"。
+- **Plex 列表接口 `/library/sections/{id}/all` 每部只回前 2 个 Genre**：统计"库里还有多少日文流派"
+  必须逐条 `GET /library/metadata/{rk}`，用列表接口会得到假阴性（本轮就踩过一次）。
 - **禁止 `for x in <字符串>`**：RestrictedPython 把 `for` 编译成 `x.__iter__()`，而 py2 的
   `unicode` 没有 `__iter__`（`str` 有），所以 `for ch in text` 在插件里必崩
   `AttributeError: 'unicode' object has no attribute '__iter__'`。
@@ -215,6 +241,14 @@ python C:/Script/metatube/_tools/compare_bundle.py
 - **DeepL 备用引擎当前是"假的"可用**：免费额度已用尽，`fallback_parameters` 里也没有
   `deepl.auth_key`，实测每次都是 `403 Forbidden`。用户计划下月（2026-12）再补额度/凭据；
   在此之前它每个标题白花一次 1 秒请求，想省时间可临时把它从 `translation_fallback_engines` 里去掉。
+- **评分/评论的"清空"只允许在用户关开关时发生**（P3，`6f816a9`）：原实现是每次刷新先
+  `rating = 0` / `reviews.clear()`，再靠"源有分 + 评论接口成功"重建，于是换到 `score=0`
+  的备用源就丢评分、评论接口 404 就丢评论。现在：`Enable ratings` 关掉才清零；开着时源没分
+  就回落到 `metadata_memory` 里的 `r`（日志 `Rating kept from memory`）；评论接口失败只 WARN，
+  拿到非空评论才 clear+重建，否则记 `Reviews kept`。
+  副作用：**provider 真删掉的评论会一直留着**，要强制清空只能临时关掉 `Enable reviews` 再刷新。
+- **刷新会重新提交海报并夺走封面**：`Poster submitted` 之后 Plex 会把新海报设为选中，
+  角标合成图会被顶掉。批量刷新前记着刷完再跑一次封面合成（`plex-badge-refresh`）。
 
 ---
 
