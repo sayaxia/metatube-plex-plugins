@@ -61,11 +61,19 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 
 | 项 | 值 |
 |---|---|
-| 工作目录 | `<工作区>/tools/mt-plex-plugins` |
+| 工作目录 | `C:/Script/metatube/metatube-plex-plugins` |
 | `origin` | `metatube-community/metatube-plex-plugins`（**上游，只读**） |
 | `fork` | `sayaxia/metatube-plex-plugins`（**推这里**） |
 | 分支 | `main`（当前跟踪 `origin/main`，push 时显式写 `fork main`） |
 | 已发布版本 | `86b2c28` 对应 Release `v2026.1112.1449.0-86b2c28` |
+
+**目录布局**（`C:/Script/metatube/` 下）：
+
+```
+metatube-server-ltx/     本仓库（服务端）
+metatube-plex-plugins/   Plex 插件仓库（姊妹项目）
+_tools/                  build-win.sh 构建脚本、metatube-win/ exe 运行时、_subrule/ 离线回归测试
+```
 
 **发版机制**：push 到 main 且改动命中 `*.bundle/**` 或 `scripts/check_plex_sandbox.py` 时，
 `release.yml` 自动打 tag `vYYYY.MMDD.HHMM.0-<sha>` 并发布 Release（zip 包）。一个提交一个 Release。
@@ -115,12 +123,12 @@ python -m py_compile MetaTube.bundle/Contents/Code/*.py
 python scripts/check_plex_sandbox.py            # 另可用 --self-test 自检
 
 # 角标 / 字幕 / 翻译三层保底 回归测试（不依赖 Plex、不联网）
-python <工作区>/_subrule/test_badge_rule.py         # 75 项，含静态扫描
-python <工作区>/_subrule/test_translation_rule.py   # L1/L2/L3 共 30 项
-python <工作区>/_subrule/test_subtitle_rule.py
+python C:/Script/metatube/_tools/_subrule/test_badge_rule.py         # 75 项，含静态扫描
+python C:/Script/metatube/_tools/_subrule/test_translation_rule.py   # L1/L2/L3 共 30 项
+python C:/Script/metatube/_tools/_subrule/test_subtitle_rule.py
 ```
 
-`_subrule/` 在**工作区根目录**（不在仓库内），是这三个 bundle 逻辑的离线回归测试。
+`_subrule/` 在 `C:/Script/metatube/_tools/_subrule`（不在仓库内），是这三个 bundle 逻辑的离线回归测试。
 改了角标/翻译规则却不动测试，等于没改。
 
 ---

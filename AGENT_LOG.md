@@ -72,3 +72,17 @@
   NAS 线上文件体积与 mtime）。
 - 部署/发版：无，仅文档。
 - 待办/风险：这批未提交改动的提交与部署时机仍待用户决定。
+
+---
+
+## 2026-11-16 22:33 · WorkBuddy · 项目目录迁移到 C:/Script/metatube
+
+- 改动：仓库从 `<工作区>/tools/mt-plex-plugins` 迁到 `C:/Script/metatube/metatube-plex-plugins`，
+  与服务端仓库 `metatube-server-ltx` 同级；离线回归测试迁到 `C:/Script/metatube/_tools/_subrule`，
+  三个测试脚本里的插件路径已相应调整（`../../metatube-plex-plugins`）。
+- 文件：`AGENTS.md`（工作目录、目录布局、测试命令）、本日志；仓库外 `_tools/_subrule/*.py`。
+- 验证：搬迁后 `git status` 与迁移前一致——**6 个文件的未提交改动完整保留**；
+  `test_badge_rule.py` 75 项、`test_translation_rule.py` 30 项、`test_subtitle_rule.py` 3 项、
+  `check_plex_sandbox.py` 8 文件全过。
+- 部署/发版：无。那批三层翻译保底代码**仍未提交、仍未部署**到 NAS。
+- 待办/风险：提交与部署时机仍待用户决定；测试脚本已硬编码新路径，再次搬目录要同步改。
