@@ -147,3 +147,25 @@
     且偏好界面能看到三个新设置项。
   - push 与发版待 SAYA 决定；发版前按 §3 流程补 Release 说明与 README 合并。
   - 线上 bundle 根 `VERSION` 仍是 11-07 的遗留标记（`v2026.1107.1841.0-61d83ea`），判断线上版本以文件比对为准。
+## 2026-11-17 00:11 · Doubao · 修 Plex 沙箱字符串遍历崩溃（线上实测发现）
+
+- 改动：
+  - 线上首轮刷新实测抛出 `AttributeError: 'unicode' object has no attribute '__iter__'`，
+    根因是 `utils.charset_ratio` 里的 `for ch in text`：RestrictedPython 把 `for` 编译成
+    `x.__iter__()`，py2 的 `unicode` 没有 `__iter__`（`str` 有）。
+  - 改为 `for index in range(len(text))` + `text[index]` 下标遍历，语义不变；
+    异常发生时是中止写回，没有把元数据写坏。
+- 文件：`MetaTube.bundle/Contents/Code/utils.py`、`AGENTS.md`（§0 状态、§8 已知坑加一条）、本日志；
+  仓库外 `_tools/_subrule/test_translation_rule.py`（新增 `Py2Unicode` 替身用例，30 → 31 项）。
+- 验证：
+  - 离线：`py_compile` / `check_plex_sandbox.py`（8 文件）/ 角标 75 / 翻译 31 / 字幕 3 全过。
+  - 用例有效性：反向验证过——旧写法在 `Py2Unicode` 替身下确实抛 `TypeError`，不是摆设。
+  - 线上：覆盖 `utils.py`（备份 `.bak.20261117_0011`）后，Plex 的 file watcher 自动重载插件
+    （进程 ID 变了，无需手动重启），再刷新同一测试条目：
+    BaiduAI 返污染被 L1 拒 → Baidu 同样被拒 → DeepL 403 → 大模型兜底 37 字符 →
+    标题变干净中文、简介中文、`translation_memory.json` 生成（204 字节）。
+- 部署/发版：已覆盖线上，线上 = HEAD（`_tools/compare_bundle.py` 逐文件一致）。
+- 待办/风险：
+  - DeepL 备用引擎返回 403（未配 `deepl.auth_key`），需要时在 `translation_fallback_parameters`
+    里补 `deepl.auth_key=...`。
+  - 大模型兜底是一次性池，`translation_llm_budget` 默认 30000 字符，批量刷新前先看已用多少。

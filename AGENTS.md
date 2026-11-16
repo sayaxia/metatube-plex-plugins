@@ -13,7 +13,7 @@
 |---|---|
 | 分支 / 远端 | `fork/main` = `5c494de`（对应最新 Release `v2026.1116.1517.0-f1acd5f`）；本地 `main` 领先若干提交（自 `7c0b7e9` 三层保底起，含文档修正），**均未推送**。具体 HEAD 以 `git log -1` 为准 |
 | 工作区 | **干净**，无未提交改动（此前那批「未提交未部署」的改动已提交并上线） |
-| 线上 Plex | **已热修上线**：`Contents/Code` 的 5 个文件 + `DefaultPrefs.json` 与 HEAD 逐字节一致（2026-11-16 23:54 覆盖，备份后缀 `.bak.20261116_2354`） |
+| 线上 Plex | **已热修上线，线上 = HEAD**：`Contents/Code` 5 个文件 + `DefaultPrefs.json` 与 HEAD 逐字节一致（覆盖于 2026-11-16 23:54，`utils.py` 修复于 2026-11-17 00:11，备份后缀 `.bak.20261116_2354` / `.bak.20261117_0011`）；单条目刷新实测通过三层保底 |
 | 与远端差 | 本地领先 `fork/main`（`5c494de`），**尚未 push、未触发新 Release** |
 
 开工提醒：
@@ -197,6 +197,12 @@ python C:/Script/metatube/_tools/compare_bundle.py
 - **多版本**：`C` / `UC` / `U` / `LTX` 大概率互斥，优先级 `LTX > UC > U > C > 无后缀`；
   判断冗余前先比码率，被删方码率更高要降级为"人工确认"。
 - **Plex 会缓存插件代码**：覆盖文件后若行为没变，重启 Plex 而不是反复改代码。
+- **禁止 `for x in <字符串>`**：RestrictedPython 把 `for` 编译成 `x.__iter__()`，而 py2 的
+  `unicode` 没有 `__iter__`（`str` 有），所以 `for ch in text` 在插件里必崩
+  `AttributeError: 'unicode' object has no attribute '__iter__'`。
+  2026-11-17 线上就是被这个打崩的（`utils.charset_ratio`），`py_compile` 和普通 CPython 单测都查不出。
+  要遍历文本一律用 `for i in range(len(text)): ch = text[i]`。
+  `_subrule/test_translation_rule.py` 里有 `Py2Unicode` 替身（`__iter__` 直接抛错）专门拦这种写法。
 
 ---
 
