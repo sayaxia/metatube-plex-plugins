@@ -76,7 +76,7 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 | `origin` | `metatube-community/metatube-plex-plugins`（**上游，只读**） |
 | `fork` | `sayaxia/metatube-plex-plugins`（**推这里**） |
 | 分支 | `main`（当前跟踪 `origin/main`，push 时显式写 `fork main`） |
-| 已发布版本 | 最新 Release `v2026.1116.1607.0-b6aec9e`（`MetaTube.bundle.zip` 651.1 KB，含三层翻译保底与 Plex 沙箱遍历修复）；上一版 `v2026.1116.1517.0-f1acd5f` |
+| 已发布版本 | 最新 Release `v2026.1116.1751.0-13079b0`（`MetaTube.bundle.zip` 656.6 KB，含中文元数据保护链：流派保护 / 主源换源 / 源变少不降级 / 评分评论不被清空）；上一版 `v2026.1116.1607.0-b6aec9e` |
 
 **目录布局**（`C:/Script/metatube/` 下）：
 
