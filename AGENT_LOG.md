@@ -110,3 +110,16 @@
 - 验证：`git check-ignore -v 本地README.md` 命中；文档改动，无代码影响；
   那 6 个未提交的「三层翻译保底」文件**原样保留未动**。
 - 部署/发版：无。
+
+## 2026-11-16 23:15 · WorkBuddy · 整仓推送并产出新 Release（v2026.1116.1517.0）
+
+- 改动：把本地 5 个提交推到 `fork/main`（`86b2c28..f1acd5f`）。因为其中 `b70e3a7` 改了 bundle，
+  `release.yml` 自动产出 Release **`v2026.1116.1517.0-f1acd5f`**
+  （`MetaTube.bundle.zip` 646.2 KB、`MetaTubeHelper.bundle.zip` 6.9 KB），
+  即「Plex 面板可选 BaiduAI `nmt`/`llm` 模型」这个功能**正式进了 GitHub 发行版**（此前只热修 NAS）。
+- 文件：无代码改动（仅推送既有提交）；本日志。
+- 验证：Actions `Publish Plex Plug-in Bundle` run `43894672269` completed/success；
+  Release 资产齐全；工作区剩余 6 个「三层翻译保底」文件**原样保留未动**。
+- 部署/发版：GitHub 侧已发布。**NAS 上的插件仍是 11-12 的热修版**，要上 646.2 KB 的新 bundle
+  需手动覆盖 + 重启 Plex（不要只说"已部署"）。
+- 待办/风险：三层翻译保底仍未提交；一旦提交并部署，需同步删掉 `AGENTS.md` 第 0 节的未提交警示。
