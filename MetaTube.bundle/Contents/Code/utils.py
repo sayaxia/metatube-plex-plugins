@@ -491,13 +491,17 @@ def in_charset(ch, ranges):
 
 
 def charset_ratio(text, ranges):
+    # 不要写 "for ch in text"：RestrictedPython 把 for 编译成 x.__iter__(),
+    # 而 py2 的 unicode 没有 __iter__，在 Plex 里会直接 AttributeError。
+    # 用下标遍历，unicode/str 都支持。
     if not text:
         return 0.0
     hits = 0
-    for ch in text:
-        if in_charset(ch, ranges):
+    total = len(text)
+    for index in range(total):
+        if in_charset(text[index], ranges):
             hits = hits + 1
-    return float(hits) / len(text)
+    return float(hits) / total
 
 
 def is_chinese_target(target):
