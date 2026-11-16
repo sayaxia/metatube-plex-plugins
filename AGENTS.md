@@ -54,6 +54,10 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 6. **不打印密钥。** 翻译凭据存在 Plex 偏好与参数表里；调试日志只打"字段是否存在"，不打值。
 7. **改完必须验证**（见 §5），验证没过不许说"完成"。
 8. **一个改动一个主题。**
+9. **临时文件只放 `C:/Script/metatube/temp/`。** 排障、试运行、一次性脚本、日志 dump、截图、
+   验证产物，一律写到这个目录；**不要写进仓库、不要放桌面**。用完确认「确实需要保留」的，
+   再挪进项目里合适的位置（脚本进 `scripts/`、回归测试进对应测试目录）。**每次 push 前清一遍 temp**，
+   确认过期的直接删——仓库里出现临时文件同样算不合格（见验证清单）。
 
 ---
 
@@ -73,6 +77,7 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 metatube-server-ltx/     本仓库（服务端）
 metatube-plex-plugins/   Plex 插件仓库（姊妹项目）
 _tools/                  build-win.sh 构建脚本、metatube-win/ exe 运行时、_subrule/ 离线回归测试
+temp/                    临时目录：排障/试运行产生的脚本、dump、截图全放这里（不放仓库内）
 ```
 
 **发版机制**：push 到 main 且改动命中 `*.bundle/**` 或 `scripts/check_plex_sandbox.py` 时，
@@ -130,6 +135,9 @@ python C:/Script/metatube/_tools/_subrule/test_subtitle_rule.py
 
 `_subrule/` 在 `C:/Script/metatube/_tools/_subrule`（不在仓库内），是这三个 bundle 逻辑的离线回归测试。
 改了角标/翻译规则却不动测试，等于没改。
+
+**push 前另清一遍 `C:/Script/metatube/temp/`**：排障脚本、日志 dump、截图、一次性验证产物只放那里，
+过期即删；确认要长期保留的再挪进仓库（脚本进 `scripts/`、回归用例进 `_tools/_subrule`）。
 
 ---
 
