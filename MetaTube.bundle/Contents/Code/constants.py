@@ -103,6 +103,9 @@ KEY_TRANSLATION_MODE = 'translation_mode'
 KEY_TRANSLATION_ENGINE = 'translation_engine'
 KEY_TRANSLATION_ENGINE_PARAMETERS = 'translation_engine_parameters'
 KEY_TRANSLATION_BAIDU_LLM = 'translation_baidu_llm'
+KEY_TRANSLATION_FALLBACK_ENGINES = 'translation_fallback_engines'
+KEY_TRANSLATION_FALLBACK_PARAMETERS = 'translation_fallback_parameters'
+KEY_TRANSLATION_LLM_BUDGET = 'translation_llm_budget'
 
 # Translation Enums
 TRANSLATION_MODE_DISABLED = 'Disabled'

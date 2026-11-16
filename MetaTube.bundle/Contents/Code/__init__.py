@@ -153,13 +153,24 @@ class MetaTubeAgent(Agent.Movies):
     def translate_movie_info(m, lang):
         mode = Prefs[KEY_TRANSLATION_MODE]
 
+        # cache_key lets the translation memory answer for this exact movie
+        # later on, so a quota outage cannot rewrite the library to Japanese.
+        # A provider without a number must not share the "" key with others.
+        number = getattr(m, 'number', None) or ''
+
         if TRANSLATION_MODE_ENUMS[mode] & \
                 TRANSLATION_MODE_ENUMS[TRANSLATION_MODE_TITLE] and m.title:
-            m.title = translate_text(m.title, lang=lang, fallback=m.title)
+            m.title = translate_text(m.title, lang=lang, fallback=m.title,
+                                     field='title',
+                                     cache_key=('{0}:title'.format(number)
+                                                if number else None))
 
         if TRANSLATION_MODE_ENUMS[mode] & \
                 TRANSLATION_MODE_ENUMS[TRANSLATION_MODE_SUMMARY] and m.summary:
-            m.summary = translate_text(m.summary, lang=lang, fallback=m.summary)
+            m.summary = translate_text(m.summary, lang=lang, fallback=m.summary,
+                                       field='summary',
+                                       cache_key=('{0}:summary'.format(number)
+                                                  if number else None))
 
     @staticmethod
     def translate_reviews(reviews, lang):
@@ -170,7 +181,8 @@ class MetaTubeAgent(Agent.Movies):
             for review in reviews:
                 if review.comment:
                     review.comment = translate_text(review.comment, lang=lang,
-                                                    fallback=review.comment)
+                                                    fallback=review.comment,
+                                                    field='review')
 
     @staticmethod
     def try_update_reviews(pid):

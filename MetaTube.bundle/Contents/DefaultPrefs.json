@@ -200,5 +200,23 @@
     "label": "BaiduAI: use LLM translation (off = machine translation)",
     "type": "bool",
     "default": "false"
+  },
+  {
+    "id": "translation_fallback_engines",
+    "label": "Translation fallback engines (comma separated, tried in order after the main engine fails)",
+    "type": "text",
+    "default": "Baidu,DeepL"
+  },
+  {
+    "id": "translation_fallback_parameters",
+    "label": "Fallback engine parameters (engine prefixed, e.g. baidu.appid=..,baidu.key=..,deepl.auth_key=..)",
+    "type": "text",
+    "default": ""
+  },
+  {
+    "id": "translation_llm_budget",
+    "label": "BaiduAI: large-model fallback budget in characters, 0 disables it (the LLM quota never refills)",
+    "type": "text",
+    "default": "30000"
   }
 ]

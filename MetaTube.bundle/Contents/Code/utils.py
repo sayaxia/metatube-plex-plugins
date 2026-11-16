@@ -450,3 +450,151 @@ def extra_media_durations(obj):
             durations[key] = durations[key] + int(part.duration)
 
     return durations
+
+
+# ---------------------------------------------------------------------------
+# Translation quality gate
+#
+# A translation engine fails in two very different ways: the request fails
+# outright (quota exhausted, timeout, EOF), or it answers with something that
+# is not a usable translation at all - the Japanese original, or page
+# furniture instead of text (seen in production: BaiduAI nmt answering a
+# summary with "您的位置：知道爆料馆..."). translator.py treats the two cases
+# differently, so the second kind has to be recognised here.
+# ---------------------------------------------------------------------------
+
+# Tolerated: a real name such as 朝妃りお keeps its kana in a Chinese
+# translation, so a few kana characters cannot mean "not translated".
+KANA_MINOR_RATIO = 0.02
+KANA_UNTRANSLATED_RATIO = 0.15
+TRANSLATION_MIN_RATIO = 0.2
+TRANSLATION_MAX_RATIO = 3.0
+
+KANA_RANGES = ((0x3040, 0x309F), (0x30A0, 0x30FF), (0xFF66, 0xFF9D))
+HANGUL_RANGE = (0xAC00, 0xD7AF)
+CJK_RANGES = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF))
+
+TRANSLATION_POLLUTION_MARKERS = (
+    u'您的位置', u'知道爆料馆', u'点击进入', u'更多知识', u'百度百科',
+    u'版权所有', u'返回首页', u'相关推荐',
+)
+
+CHINESE_TARGET_MARKERS = ('zh', 'cn', 'chi', 'hans', 'hant')
+
+
+def in_charset(ch, ranges):
+    o = ord(ch)
+    for low, high in ranges:
+        if low <= o <= high:
+            return True
+    return False
+
+
+def charset_ratio(text, ranges):
+    if not text:
+        return 0.0
+    hits = 0
+    for ch in text:
+        if in_charset(ch, ranges):
+            hits = hits + 1
+    return float(hits) / len(text)
+
+
+def is_chinese_target(target):
+    """True when the requested output language is Chinese.
+
+    ``target`` may be a locale code like 'zh' / 'zh-Hans' or a Locale object;
+    anything unrecognised is treated as Chinese, which is the plug-in default.
+    """
+    if not target:
+        return True
+    code = u'{0}'.format(target).strip().lower()
+    if not code:
+        return True
+    for marker in CHINESE_TARGET_MARKERS:
+        if marker in code:
+            return True
+    return False
+
+
+def to_text(value):
+    """Coerce a value to text so byte strings cannot trip the gate below."""
+    if value is None:
+        return u''
+    if isinstance(value, type(u'')):
+        return value
+    try:
+        return value.decode('utf-8')
+    except AttributeError:
+        return u'{0}'.format(value)
+    except Exception:
+        return u'{0}'.format(value)
+
+
+def looks_translated(text, source=None, target=None):
+    """Judge whether ``text`` is a usable translation of ``source``.
+
+    Returns ``(ok, reason)``. ``ok`` is False when the text should not be
+    written into Plex; ``reason`` is a short machine-readable explanation that
+    ends up in the log, so a bad batch can be recognised later.
+    """
+    text = to_text(text)
+    source = to_text(source) if source else None
+
+    if not text:
+        return False, 'empty'
+
+    kana = charset_ratio(text, KANA_RANGES)
+    if kana > KANA_UNTRANSLATED_RATIO:
+        return False, 'untranslated (kana {0:.0f}%)'.format(kana * 100)
+
+    if charset_ratio(text, (HANGUL_RANGE,)) > 0.2:
+        return False, 'untranslated (hangul)'
+
+    for marker in TRANSLATION_POLLUTION_MARKERS:
+        if marker in text:
+            return False, 'polluted ({0})'.format(marker)
+
+    if source:
+        if text.strip() == source.strip():
+            return False, 'identical to source'
+        length_ratio = float(len(text)) / max(len(source), 1)
+        if length_ratio < TRANSLATION_MIN_RATIO:
+            return False, 'too short ({0:.0%} of source)'.format(length_ratio)
+        if length_ratio > TRANSLATION_MAX_RATIO:
+            return False, 'too long ({0:.0f}x source)'.format(length_ratio)
+
+    if is_chinese_target(target):
+        if charset_ratio(text, CJK_RANGES) <= 0:
+            return False, 'no Chinese characters'
+
+    if kana > KANA_MINOR_RATIO:
+        return True, 'kana-minor ({0:.0f}%)'.format(kana * 100)
+    return True, 'ok'
+
+
+def split_words(s, sep=','):
+    """Split a comma separated list, keeping the original letter case.
+
+    ``parse_list`` uppercases everything, which would turn engine names such as
+    ``BaiduAI`` into ``BAIDUAI`` and break the lookup.
+    """
+    if not s:
+        return []
+    return [i.strip() for i in s.split(sep) if i.strip()]
+
+
+def filter_prefixed(table, prefix):
+    """Return the entries of ``table`` that belong to ``prefix``, unprefixed.
+
+    Used for the shared fallback parameter table, which stores per-engine
+    credentials as ``baidu.appid=...`` / ``deepl.auth_key=...``.
+    """
+    if not table or not prefix:
+        return {}
+    head = prefix.strip().lower() + '.'
+    out = {}
+    for key in table:
+        if key.lower().startswith(head):
+            out[key[len(head):]] = table[key]
+    return out

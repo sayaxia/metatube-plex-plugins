@@ -74,6 +74,22 @@ PUT /library/metadata/{ratingKey}/poster?url=<url-encoded ratingKey>
 
 每提交一次就多了张候选，只有角标真的变了（比如 `-U` 改成 `-UC`）才会多一张，需要时清一次即可。
 
+### 中文元数据保底（2026-11）
+
+原版翻译是「一次调用，失败就把原文写回去」。2026-11-12 DeepL 额度耗尽后，全库 2889 条的
+标题与简介被日文覆盖，根因就在这条路径上：`translate_text()` 的重试全部失败后返回输入值，
+而 `update()` 会把它当成结果写进 Plex。现在改成三层保底 + 一次受限兜底：
+
+| 层 | 位置 | 作用 |
+|---|---|---|
+| L1 结果校验 | `utils.looks_translated()` | 假名 >15% 判未翻译、页面残渣判污染、长度异常判失败；2%~15% 的假名（人名）放行但记日志 |
+| L2 引擎降级 | `translator.follow_up_engines()` | 主引擎失败/不合格时按 `translation_fallback_engines` 顺序换引擎，凭据从 `引擎名.参数=值` 表里取 |
+| L3 翻译记忆 | `translator.tm_*`（`Core.storage` 的 `translation_memory.json`） | 成功过的中文永久复用，断网/额度耗尽时不再写日文；最多 4000 条 |
+| 大模型兜底 | `translator.try_llm()` | **仅**在标题被 L1 判「污染」时启用，受 `translation_llm_budget` 累计字符上限约束（该池一次性、不恢复） |
+
+失败类型是分开处理的：网络/额度类失败只换备用引擎，绝不消耗大模型池；只有「返回了垃圾中文」
+才允许升级到 llm。回归测试见 `_subrule/test_translation_rule.py`（29 项）。
+
 ---
 
 ## 二、安装
@@ -112,6 +128,39 @@ PUT /library/metadata/{ratingKey}/poster?url=<url-encoded ratingKey>
 
 > ⚠️ 服务端必须带这三张内嵌图（`metatube-sdk-go` 的 `imageutil/badge/`，v1.4.0 起就有）。
 > 服务端**没有**对应素材时，`badge.Badge()` 会因抓取失败直接报错，整张海报请求失败，Plex 只会保留旧图 —— 表现就是「改了设置但海报没变」。
+
+### 翻译保底（结果校验 / 引擎降级 / 翻译记忆）
+
+翻译失败的后果不只是「没有中文」，而是**把日文原文写回去覆盖原有中文**。2026-11-12 那次
+DeepL 额度耗尽，全库 2889 条标题与简介就是这么变成日文的。现在写入前有三层保底：
+
+| 层 | 做什么 | 判据 / 行为 |
+|---|---|---|
+| L1 结果校验 | 拦住「没翻」和「垃圾中文」 | 假名占比 >15% 判未翻译（2%~15% 视为人名放行并记日志）；命中 `您的位置` / `知道爆料馆` 等页面残渣判污染；与原文相同、长度 <20% 或 >3 倍判异常；中文目标下无汉字也判失败 |
+| L2 引擎降级 | 主引擎失败按序换备用引擎 | 额度耗尽、超时、结果不合格都算失败，依次尝试备用引擎；任一通过 L1 即采用 |
+| L3 翻译记忆 | 成功过的中文被复用 | 按 `番号:title` / `番号:summary` 存；命中即返回，**不发请求、不耗额度**，断网时也不会写日文 |
+
+| 新设置项 | 默认值 | 说明 |
+|---|---|---|
+| Translation fallback engines | `Baidu,DeepL` | 主引擎失败后依次尝试的引擎，逗号分隔，大小写不敏感 |
+| Fallback engine parameters | 空 | 备用引擎自己的凭据，`引擎名.参数=值`，如 `baidu.appid=..,baidu.key=..,deepl.auth_key=..`。**Baidu 与 BaiduAI 共用同一对 appid/key**，主引擎是 BaiduAI 时可只填 `deepl.auth_key` |
+| BaiduAI: large-model fallback budget | `30000` | 大模型兜底的**累计字符上限**，`0` = 完全禁用 |
+
+大模型（`baidu-model-type=llm`）的额度是**一次性、不会恢复**的，所以只在一种情况下动用：
+L1 判定结果被污染、字段是标题、原文 ≤120 字符、且未超预算。网络类失败（456/429/超时）
+只会换备用引擎，不会碰这个池子。
+
+日志里能直接看出走了哪一层：
+
+```text
+Translate via BaiduAI rejected: polluted (您的位置) | 您的位置：知道爆料馆>...
+Translation memory hit: <番号>:title
+BaiduAI large model fallback used: 28 chars, total 28/30000
+Translation failed for <番号>:title, keeping the original text (engines tried: BaiduAI, Baidu, DeepL)
+```
+
+记忆文件由插件自己维护（`Core.storage` 的 `translation_memory.json`），最多 4000 条，
+超出按最旧淘汰；`translation_llm_usage.json` 只记已花掉的大模型字符数。
 
 ### 类型标签（genres）
 
