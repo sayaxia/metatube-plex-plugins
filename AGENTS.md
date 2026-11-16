@@ -7,21 +7,20 @@
 
 ---
 
-## ⚠️ 0. 开工前必读：当前有一批「未提交、未部署」的改动
+## 0. 当前状态（开工前先看）
 
-工作区（`main` 分支）**不是干净状态**，这是历史遗留，不要当成垃圾清掉：
-
-| 状态 | 内容 |
+| 项 | 状态 |
 |---|---|
-| 已提交未推送 | `b70e3a7` feat(translate): add Plex switch to pick BaiduAI nmt/llm model（fork/main 还停在 `86b2c28`，领先 1 个提交） |
-| **未提交** | 中文元数据三层保底：`__init__.py` / `constants.py` / `translator.py` / `utils.py` / `DefaultPrefs.json` / `README.md` 共 6 个文件、约 +590 行 |
-| **未部署** | NAS 上跑的仍是 11-12 的热修版（`translator.py` 3.2 KB），本地仓库已是 13.8 KB。**三层保底代码还没上 Plex** |
+| 分支 / HEAD | `main` = `7c0b7e9`（**本地，未推送**）；`fork/main` 仍停在 `5c494de` |
+| 工作区 | **干净**，无未提交改动（此前那批「未提交未部署」的改动已提交并上线） |
+| 线上 Plex | **已热修上线**：`Contents/Code` 的 5 个文件 + `DefaultPrefs.json` 与 HEAD 逐字节一致（2026-11-16 23:54 覆盖，备份后缀 `.bak.20261116_2354`） |
+| 与远端差 | 本地领先 `fork/main` 1 个提交（三层翻译保底），**尚未 push、未触发新 Release** |
 
-处理原则：
+开工提醒：
 
-- **不要** `git checkout .` / `git reset --hard` / `git stash` / `git add -A`，会毁掉这批工作。
-- 需要提交时只 add 你自己改的文件；这批遗留工作由用户决定何时提交、何时部署。
-- 如果你要改 `translator.py` / `utils.py`，先 `git diff` 看清已有改动，在你的改动里**基于现状叠加**，不要回退它们。
+- 线上代码与 HEAD 已一致；动手前先 `git diff` / 跑一次 §5，确认没有反向差异或工作区残留。
+- 线上 bundle 根目录的 `VERSION`（内容 `v2026.1107.1841.0-61d83ea`）和 `LICENSE` 是 11-07 整包安装的遗留标记，**不代表当前线上版本**；判断线上版本一律以 `Contents/Code` 文件内容比对为准（比对脚本见仓库外 `temp/compare_bundle.py`）。
+- 文件名/番号类真实数据不得进提交（README 里的日志示例已用 `<番号>` 占位）。
 
 ---
 
@@ -74,7 +73,7 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 | `origin` | `metatube-community/metatube-plex-plugins`（**上游，只读**） |
 | `fork` | `sayaxia/metatube-plex-plugins`（**推这里**） |
 | 分支 | `main`（当前跟踪 `origin/main`，push 时显式写 `fork main`） |
-| 已发布版本 | `86b2c28` 对应 Release `v2026.1112.1449.0-86b2c28` |
+| 已发布版本 | 最新 Release `v2026.1116.1517.0-f1acd5f`（对应 `f1acd5f`，`MetaTube.bundle.zip` 646.2 KB）；本地 `7c0b7e9` 领先且**未推送** |
 
 **目录布局**（`C:/Script/metatube/` 下）：
 
@@ -164,7 +163,9 @@ python C:/Script/metatube/_tools/_subrule/test_subtitle_rule.py
 4. 验证：Plex 日志里搜 `MetaTube`，确认没有 `Exception starting plug-in`；偏好界面能看到新开关；
    拿一个条目手动刷新，确认标题/简介是中文。
 
-⚠️ 热修是**应急手段**：改完要回到仓库补提交，否则线上与仓库分叉（当前就是这种状态）。
+⚠️ 热修是**应急手段**：改完必须回到仓库补提交，否则线上与仓库分叉。
+2026-11-16 那批「三层翻译保底」已按这个流程走完（补提交 `7c0b7e9` + 覆盖 5 个文件 + 重启 Plex），
+线上与 HEAD 一致；以后再热修照同一套走，并在 `AGENT_LOG.md` 写清备份后缀与验证命令。
 
 ---
 

@@ -123,3 +123,27 @@
 - 部署/发版：GitHub 侧已发布。**NAS 上的插件仍是 11-12 的热修版**，要上 646.2 KB 的新 bundle
   需手动覆盖 + 重启 Plex（不要只说"已部署"）。
 - 待办/风险：三层翻译保底仍未提交；一旦提交并部署，需同步删掉 `AGENTS.md` 第 0 节的未提交警示。
+
+## 2026-11-16 23:54 · Doubao · 三层翻译保底补提交 + 热修上线（线上 = HEAD）
+
+- 改动：
+  - 把工作区遗留的 6 个文件（中文元数据三层保底）补成一个提交 `7c0b7e9`，工作区恢复干净。
+  - 提交前脱敏：README 日志示例里的真实番号改成 `<番号>` 占位。
+  - 按热修流程覆盖线上 5 个文件（`__init__.py`、`constants.py`、`translator.py`、`utils.py`、`DefaultPrefs.json`），
+    覆盖前逐个备份为 `<文件名>.bak.20261116_2354`。
+  - 顺带纠正文档口径：此前记的「线上仍是 11-12 热修版、未部署新版」不准确——按内容哈希比对，
+    线上此前的内容已与上一版 Release（`v2026.1116.1517.0-f1acd5f`）一致，只是行尾不同。
+- 文件：`MetaTube.bundle/Contents/Code/{__init__.py,constants.py,translator.py,utils.py}`、
+  `MetaTube.bundle/Contents/DefaultPrefs.json`、`README.md`、`AGENTS.md`、本日志。
+- 验证：
+  - 覆盖前：`py_compile` 通过、`check_plex_sandbox.py` 8 文件无下划线命名、`_subrule` 角标 75 / 翻译 30 / 字幕 3 全过。
+  - 覆盖后：归一化（CRLF→LF）后逐文件 SHA-256 比对，`Contents` 下 8 个关键文件
+    **NAS / HEAD / 工作区三者完全一致**；线上 `DefaultPrefs.json` 已含三个新键
+    （`translation_fallback_engines` / `translation_fallback_parameters` / `translation_llm_budget`）。
+- 部署/发版：**已部署到线上**（在 Plex 停止期间覆盖）。**未推送 GitHub**：`fork/main` 仍停在 `5c494de`，
+  `main` 领先 1 个提交，未触发新 Release。
+- 待办/风险：
+  - 覆盖后必须重启/启动 Plex 才加载新代码与偏好；启动后确认日志无 `Exception starting plug-in`，
+    且偏好界面能看到三个新设置项。
+  - push 与发版待 SAYA 决定；发版前按 §3 流程补 Release 说明与 README 合并。
+  - 线上 bundle 根 `VERSION` 仍是 11-07 的遗留标记（`v2026.1107.1841.0-61d83ea`），判断线上版本以文件比对为准。
