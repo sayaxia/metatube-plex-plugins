@@ -97,3 +97,16 @@
 - 文件：`AGENTS.md`、本日志；仓库外 `C:/Script/metatube/temp/README.md`、`C:/Script/metatube/交接提示词.md`。
 - 验证：文档改动，无代码影响；工作区里那 6 个「三层翻译保底」文件**原样保留，未动**。
 - 部署/发版：无。仍未提交、未部署（见 §0 警示）。
+
+## 2026-11-16 23:15 · WorkBuddy · 本地 README 与 GitHub README 分离
+
+- 改动（用户要求）：每轮改动写进**仓库外** `C:/Script/metatube/本地README.md`
+  （**绝不上传 GitHub**，禁止 `git add -f`）；`README.md` 只写成品当前真实具备的能力，
+  本地加过又删掉的功能、被否掉的方案、事故复盘都不进 GitHub README。
+  本仓库的轮次（三层保底未提交未部署、百度 AI 双模型未推送、沙箱命名修复已发布、
+  PMS 1.40 换封面放弃）已回填到该文件的「插件仓库」章节。
+  `AGENTS.md` 铁律新增第 10 条、§9 文档义务表加一行；`.gitignore` 加本地 README 防呆。
+- 文件：`AGENTS.md`、`.gitignore`、本日志；仓库外 `本地README.md`、`交接提示词.md`。
+- 验证：`git check-ignore -v 本地README.md` 命中；文档改动，无代码影响；
+  那 6 个未提交的「三层翻译保底」文件**原样保留未动**。
+- 部署/发版：无。

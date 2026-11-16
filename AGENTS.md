@@ -58,6 +58,11 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
    验证产物，一律写到这个目录；**不要写进仓库、不要放桌面**。用完确认「确实需要保留」的，
    再挪进项目里合适的位置（脚本进 `scripts/`、回归测试进对应测试目录）。**每次 push 前清一遍 temp**，
    确认过期的直接删——仓库里出现临时文件同样算不合格（见验证清单）。
+10. **本地 README 与 GitHub README 严格分开。** 每轮改动记在仓库外的
+    `C:/Script/metatube/本地README.md`（**绝不上传 GitHub**，也禁止 `git add -f` 强加）。
+    GitHub 的 `README*.md` / `FORK.md` 只写**成品当前真实具备的能力**；本地加过又删掉的功能、
+    试过又否掉的方案、事故复盘一律**不进** GitHub README，只在本地 README 留一条
+    「加了什么 / 为什么撤 / 撤到哪儿」。
 
 ---
 
@@ -197,6 +202,7 @@ python C:/Script/metatube/_tools/_subrule/test_subtitle_rule.py
 | 角标 / 番号 / 字幕规则 | 本文件 §8、`README.md` 规则表、`_subrule/` 对应用例 |
 | 翻译逻辑 | 本文件 §4/§8、`README.md` 翻译章节、`_subrule/test_translation_rule.py` |
 | 部署方式、发版流程 | 本文件 §3/§6 |
+| 每轮完整改动、试过又撤掉的方案 | 仓库外 `C:/Script/metatube/本地README.md`（**绝不提交**） |
 
 ---
 

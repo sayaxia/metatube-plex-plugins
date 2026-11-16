@@ -158,3 +158,9 @@ cython_debug/
 # Test files
 *.sqlite
 *test.py
+
+# 本地文件：绝不上传。本地 README 放在仓库外 C:/Script/metatube/本地README.md，
+# 这里只是防呆，避免有人顺手在仓库里建一份又被提交。
+本地README.md
+LOCAL_README.md
+*.local.md
