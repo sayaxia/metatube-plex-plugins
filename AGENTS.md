@@ -19,7 +19,10 @@
 开工提醒：
 
 - 线上代码与 HEAD 已一致；动手前先 `git diff` / 跑一次 §5，确认没有反向差异或工作区残留。
-- 线上 bundle 根目录的 `VERSION`（内容 `v2026.1107.1841.0-61d83ea`）和 `LICENSE` 是 11-07 整包安装的遗留标记，**不代表当前线上版本**；判断线上版本一律以 `Contents/Code` 文件内容比对为准（比对脚本见仓库外 `temp/compare_bundle.py`）。
+- 判断线上版本的**唯一方法**是比对文件内容：`python C:/Script/metatube/_tools/compare_bundle.py`
+  （归一化行尾后逐文件 SHA-256，输出 NAS / HEAD / 工作区三列）。线上 bundle 根目录的
+  `VERSION`（内容 `v2026.1107.1841.0-61d83ea`）和 `LICENSE` 是 11-07 整包安装的遗留标记，
+  **不代表当前线上版本**。
 - 文件名/番号类真实数据不得进提交（README 里的日志示例已用 `<番号>` 占位）。
 
 ---
@@ -135,6 +138,9 @@ python scripts/check_plex_sandbox.py            # 另可用 --self-test 自检
 python C:/Script/metatube/_tools/_subrule/test_badge_rule.py         # 75 项，含静态扫描
 python C:/Script/metatube/_tools/_subrule/test_translation_rule.py   # L1/L2/L3 共 30 项
 python C:/Script/metatube/_tools/_subrule/test_subtitle_rule.py
+
+# 线上（NAS）与本地 HEAD 内容比对：归一化行尾后逐文件 SHA-256，输出 NAS / HEAD / 工作区三列
+python C:/Script/metatube/_tools/compare_bundle.py
 ```
 
 `_subrule/` 在 `C:/Script/metatube/_tools/_subrule`（不在仓库内），是这三个 bundle 逻辑的离线回归测试。
