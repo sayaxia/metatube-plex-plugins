@@ -11,10 +11,10 @@
 
 | 项 | 状态 |
 |---|---|
-| 分支 / 远端 | `fork/main` = `5c494de`（对应最新 Release `v2026.1116.1517.0-f1acd5f`）；本地 `main` 领先若干提交（自 `7c0b7e9` 三层保底起，含文档修正），**均未推送**。具体 HEAD 以 `git log -1` 为准 |
-| 工作区 | **干净**，无未提交改动（此前那批「未提交未部署」的改动已提交并上线） |
+| 分支 / 远端 | `fork/main` = `b6aec9e`（**已推送**），对应最新 Release **`v2026.1116.1607.0-b6aec9e`**；具体 HEAD 以 `git log -1` 为准 |
+| 工作区 | **干净**，无未提交改动 |
 | 线上 Plex | **已热修上线，线上 = HEAD**：`Contents/Code` 5 个文件 + `DefaultPrefs.json` 与 HEAD 逐字节一致（覆盖于 2026-11-16 23:54，`utils.py` 修复于 2026-11-17 00:11，备份后缀 `.bak.20261116_2354` / `.bak.20261117_0011`）；单条目刷新实测通过三层保底 |
-| 与远端差 | 本地领先 `fork/main`（`5c494de`），**尚未 push、未触发新 Release** |
+| 与远端差 | 无未推代码；后续只推文档也不会触发新 Release（release 只认 `*.bundle/**` 变动） |
 
 开工提醒：
 
@@ -76,7 +76,7 @@ Plex 影视元数据代理插件（`MetaTube.bundle`），从 MetaTube 服务端
 | `origin` | `metatube-community/metatube-plex-plugins`（**上游，只读**） |
 | `fork` | `sayaxia/metatube-plex-plugins`（**推这里**） |
 | 分支 | `main`（当前跟踪 `origin/main`，push 时显式写 `fork main`） |
-| 已发布版本 | 最新 Release `v2026.1116.1517.0-f1acd5f`（对应 `f1acd5f`，`MetaTube.bundle.zip` 646.2 KB）；本地 `7c0b7e9` 领先且**未推送** |
+| 已发布版本 | 最新 Release `v2026.1116.1607.0-b6aec9e`（`MetaTube.bundle.zip` 651.1 KB，含三层翻译保底与 Plex 沙箱遍历修复）；上一版 `v2026.1116.1517.0-f1acd5f` |
 
 **目录布局**（`C:/Script/metatube/` 下）：
 

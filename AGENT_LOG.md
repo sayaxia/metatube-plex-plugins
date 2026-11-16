@@ -169,3 +169,16 @@
   - DeepL 备用引擎返回 403（未配 `deepl.auth_key`），需要时在 `translation_fallback_parameters`
     里补 `deepl.auth_key=...`。
   - 大模型兜底是一次性池，`translation_llm_budget` 默认 30000 字符，批量刷新前先看已用多少。
+## 2026-11-17 00:20 · Doubao · 整仓推送并产出 Release v2026.1116.1607.0
+
+- 改动：把本地 6 个提交推到 `fork/main`（`5c494de..b6aec9e`）：
+  三层翻译保底 `7c0b7e9`、文档修正 `b2ec18e`/`f2bf690`/`82cf306`、沙箱遍历修复 `8d87d61`、坑记录 `b6aec9e`。
+  其中 `*.bundle/**` 有变动，`release.yml` 自动产出 Release **`v2026.1116.1607.0-b6aec9e`**。
+- 文件：无新增代码改动；`AGENTS.md` §0/§3 同步为已推送状态、本日志。
+- 验证：
+  - Actions `Publish Plex Plug-in Bundle`（`b6aec9e`）completed / **success**。
+  - Release 资产：`MetaTube.bundle.zip` 666856 字节（651.1 KB）、`MetaTubeHelper.bundle.zip` 7029 字节。
+  - 下载发布 zip 解包，与本地 HEAD 归一化（CRLF→LF）后逐文件 SHA-256 比对：6 个关键文件 **全部 SAME**。
+- 部署/发版：GitHub 侧已发布；线上 Plex 已在同一版本（直接覆盖部署，未用 zip 整包替换）。
+- 待办/风险：线上 bundle 根的遗留 `VERSION`/`LICENSE` 仍未更新（不影响运行）；
+  下次若要整包替换，注意先停 Plex 再覆盖，避免带着旧 `__pycache__`。
