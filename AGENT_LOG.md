@@ -182,3 +182,14 @@
 - 部署/发版：GitHub 侧已发布；线上 Plex 已在同一版本（直接覆盖部署，未用 zip 整包替换）。
 - 待办/风险：线上 bundle 根的遗留 `VERSION`/`LICENSE` 仍未更新（不影响运行）；
   下次若要整包替换，注意先停 Plex 再覆盖，避免带着旧 `__pycache__`。
+## 2026-11-17 00:16 · Doubao · 查清插件设置怎么"记住"API + DeepL 额度用尽
+
+- 改动：无代码改动，纯文档（三条坑写进 `AGENTS.md` §8）。
+- 查了什么：读 NAS 上 `Plug-in Support/Preferences/com.plexapp.agents.metatube.xml`（39783 字节，
+  31 个字段），对照 `DefaultPrefs.json`（34 个字段），确认：
+  - 枚举在 XML 里存的是**下标**：`translation_engine=5` → `BaiduAI`；`translation_mode=4` → `Title and Summary`。
+  - `translation_engine_parameters` 目前是 `baidu-app-id=…,baidu-app-key=…`（值未记录、未打印）。
+  - 三个新翻译键不在 XML 里，由 Plex 加载时用 DefaultPrefs 的默认值补齐。
+  - 面板是静态表单：切引擎只改枚举自身，不会改写参数框 —— 这解释了用户看到的"切换引擎 API 不变"。
+- 待办/风险：DeepL 免费额度已用尽（用户决定 2026-12 再补），期间每次调用固定 403；
+  `translation_fallback_parameters` 里也没有 `deepl.auth_key`，补额度时要一起补。

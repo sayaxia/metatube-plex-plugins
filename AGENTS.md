@@ -203,6 +203,18 @@ python C:/Script/metatube/_tools/compare_bundle.py
   2026-11-17 线上就是被这个打崩的（`utils.charset_ratio`），`py_compile` 和普通 CPython 单测都查不出。
   要遍历文本一律用 `for i in range(len(text)): ch = text[i]`。
   `_subrule/test_translation_rule.py` 里有 `Py2Unicode` 替身（`__iter__` 直接抛错）专门拦这种写法。
+- **Plex 设置面板是静态表单，字段之间不联动**：`translation_engine` 改的只是那一项（在
+  `Plug-in Support/Preferences/com.plexapp.agents.metatube.xml` 里存成**下标**，如 `5` = `BaiduAI`、
+  `translation_mode` 的 `4` = `Title and Summary`），**不会**改写下面的 `translation_engine_parameters`。
+  所以换了引擎必须手动把参数框改成该引擎的凭据（如 `deepl.auth_key=…`、`baidu-app-id=…`），
+  否则新引擎拿着旧凭据必然失败，再走 L2 降级。
+- **Plex 只持久化面板里动过的字段**：这个 XML 目前只有 31 个字段，`DefaultPrefs.json` 有 34 个——
+  新增的三个翻译键（`translation_fallback_engines`/`_parameters`/`_budget`）不在文件里，
+  是 Plex 加载时用默认值补进 `Prefs` 的。因此读新键一律走 `pref_or()` / try 兜底，
+  升级插件时旧 `Preferences` 文件缺键也不会 KeyError。
+- **DeepL 备用引擎当前是"假的"可用**：免费额度已用尽，`fallback_parameters` 里也没有
+  `deepl.auth_key`，实测每次都是 `403 Forbidden`。用户计划下月（2026-12）再补额度/凭据；
+  在此之前它每个标题白花一次 1 秒请求，想省时间可临时把它从 `translation_fallback_engines` 里去掉。
 
 ---
 
